@@ -116,11 +116,11 @@ if __name__ == "__main__":
     # Test A* algorithm
     import sys
     sys.path.append('..')
-    from reference_implementation.graph import Graph
-    from reference_implementation.dijkstra import dijkstra
+    from graph import Graph
+    from dijkstra import dijkstra
     
     g = Graph()
-    g.load_from_csv("reference_data/nodes.csv", "reference_data/edges.csv")
+    g.load_from_csv("../../data/nodes.csv", "../../data/edges.csv")
     
     print("Testing A* Algorithm")
     print("="*60)

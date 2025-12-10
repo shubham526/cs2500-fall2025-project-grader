@@ -9,9 +9,32 @@ import sys
 from pathlib import Path
 
 
+def get_project_root():
+    """Get the project root directory"""
+    # If running from src/core/, go up two levels
+    # If running from project root, stay there
+    current = Path(__file__).parent
+
+    # Check if we're in src/core/
+    if current.name == 'core' and current.parent.name == 'src':
+        return current.parent.parent
+    # Check if we're in src/
+    elif current.name == 'src':
+        return current.parent
+    # Otherwise assume we're in project root
+    else:
+        return current
+
+
+# Set project root
+PROJECT_ROOT = get_project_root()
+os.chdir(PROJECT_ROOT)
+
+
 def check_file(filepath, description):
     """Check if a file exists"""
-    exists = os.path.exists(filepath)
+    full_path = PROJECT_ROOT / filepath
+    exists = full_path.exists()
     status = "✓" if exists else "✗"
     print(f"  {status} {description}: {filepath}")
     return exists
@@ -34,14 +57,20 @@ def test_reference_implementation():
     print("-" * 60)
 
     try:
-        sys.path.insert(0, 'reference_implementation')
-        from graph import Graph
-        from dijkstra import dijkstra
-        from astar import astar
+        # Add paths to sys.path
+        ref_impl_path = PROJECT_ROOT / 'src' / 'reference_implementation'
+        sys.path.insert(0, str(ref_impl_path))
 
-        # Load graph
+        from src.reference_implementation.graph import Graph
+        from src.reference_implementation.dijkstra import dijkstra
+        from src.reference_implementation.astar import astar
+
+        # Load graph with absolute paths
+        nodes_path = PROJECT_ROOT / 'data' / 'nodes.csv'
+        edges_path = PROJECT_ROOT / 'data' / 'edges.csv'
+
         g = Graph()
-        g.load_from_csv("reference_data/nodes.csv", "reference_data/edges.csv")
+        g.load_from_csv(str(nodes_path), str(edges_path))
 
         print(f"  ✓ Graph loaded: {g.num_nodes()} nodes, {g.num_edges()} edges")
 
@@ -67,6 +96,8 @@ def main():
     print("=" * 60)
     print("CS 2500 Autograder - Setup Verification")
     print("=" * 60)
+    print(f"Project Root: {PROJECT_ROOT}")
+    print()
 
     all_passed = True
 
@@ -75,16 +106,15 @@ def main():
     print("-" * 60)
 
     files_to_check = [
-        ("autograder.py", "Main autograder script"),
-        ("test_suite.py", "Test suite"),
-        ("report_generator.py", "PDF report generator"),
+        ("src/core/autograder.py", "Main autograder script"),
+        ("src/core/test_suite.py", "Test suite"),
+        ("src/core/report_generator.py", "PDF report generator"),
         ("requirements.txt", "Python dependencies"),
-        ("submissions.txt", "Submissions file"),
-        ("reference_data/nodes.csv", "Nodes dataset"),
-        ("reference_data/edges.csv", "Edges dataset"),
-        ("reference_implementation/graph.py", "Reference graph implementation"),
-        ("reference_implementation/dijkstra.py", "Reference Dijkstra implementation"),
-        ("reference_implementation/astar.py", "Reference A* implementation"),
+        ("data/nodes.csv", "Nodes dataset"),
+        ("data/edges.csv", "Edges dataset"),
+        ("src/reference_implementation/graph.py", "Reference graph implementation"),
+        ("src/reference_implementation/dijkstra.py", "Reference Dijkstra implementation"),
+        ("src/reference_implementation/astar.py", "Reference A* implementation"),
     ]
 
     for filepath, description in files_to_check:
@@ -113,14 +143,18 @@ def main():
     print("-" * 60)
 
     try:
+        # Add core to path
+        core_path = PROJECT_ROOT / 'src' / 'core'
+        sys.path.insert(0, str(core_path))
+
         from test_suite import DijkstraTester
 
         expected_costs = DijkstraTester.EXPECTED_COSTS
 
         if all(cost == 0 or cost > 1 for cost in expected_costs.values()):
             print("  ⚠ Expected costs may need updating")
-            print("  ℹ Run: cd reference_implementation && python dijkstra.py")
-            print("  ℹ Then update EXPECTED_COSTS in test_suite.py")
+            print("  ℹ Run: cd src/reference_implementation && python dijkstra.py")
+            print("  ℹ Then update EXPECTED_COSTS in src/core/test_suite.py")
         else:
             print("  ✓ Expected costs are configured")
 
@@ -128,38 +162,43 @@ def main():
         print(f"  ✗ Could not check expected costs: {e}")
         all_passed = False
 
-    # Check submissions file
-    print("\n[5] Checking Submissions File")
+    # Check submissions file (optional - not required in repo)
+    print("\n[5] Checking Submissions File (Optional)")
     print("-" * 60)
 
     try:
-        with open("submissions.txt", 'r') as f:
-            lines = [line.strip() for line in f if line.strip() and not line.startswith('#')]
+        submissions_path = PROJECT_ROOT / "submissions.txt"
+        if submissions_path.exists():
+            with open(submissions_path, 'r') as f:
+                lines = [line.strip() for line in f if line.strip() and not line.startswith('#')]
 
-        if len(lines) == 0:
-            print("  ℹ No submissions yet (this is OK)")
-            print("  ℹ Add submissions in format: StudentName,https://github.com/user/repo")
+            if len(lines) == 0:
+                print("  ℹ submissions.txt exists but is empty")
+                print("  ℹ Add submissions in format: StudentName,https://github.com/user/repo")
+            else:
+                print(f"  ✓ Found {len(lines)} submission(s) in submissions.txt")
+                for line in lines[:3]:  # Show first 3
+                    parts = line.split(',')
+                    if len(parts) == 2:
+                        print(f"    • {parts[0]}")
         else:
-            print(f"  ✓ Found {len(lines)} submission(s)")
-            for line in lines[:3]:  # Show first 3
-                parts = line.split(',')
-                if len(parts) == 2:
-                    print(f"    • {parts[0]}")
+            print("  ℹ submissions.txt not found (this is OK)")
+            print("  ℹ You'll specify the path when running: python grade.py -s /path/to/submissions.txt")
 
     except Exception as e:
-        print(f"  ✗ Could not read submissions.txt: {e}")
-        all_passed = False
+        print(f"  ⚠ Could not read submissions.txt: {e}")
+        print("  ℹ This is OK - you can specify the path at runtime")
 
     # Create grading_reports directory
     print("\n[6] Checking Output Directory")
     print("-" * 60)
 
-    output_dir = "grading_reports"
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-        print(f"  ✓ Created {output_dir}/ directory")
+    output_dir = PROJECT_ROOT / "grading_reports"
+    if not output_dir.exists():
+        output_dir.mkdir(parents=True)
+        print(f"  ✓ Created grading_reports/ directory")
     else:
-        print(f"  ✓ {output_dir}/ directory exists")
+        print(f"  ✓ grading_reports/ directory exists")
 
     # Final verdict
     print("\n" + "=" * 60)
@@ -167,10 +206,11 @@ def main():
         print("✅ ALL CHECKS PASSED!")
         print("=" * 60)
         print("\nNext steps:")
-        print("1. Update EXPECTED_COSTS in test_suite.py")
-        print("   Run: cd reference_implementation && python dijkstra.py")
-        print("2. Add student submissions to submissions.txt")
-        print("3. Run: python autograder.py")
+        print("1. Update EXPECTED_COSTS in src/core/test_suite.py")
+        print("   Run: cd src/reference_implementation && python dijkstra.py")
+        print("2. Create submissions.txt (or use any path)")
+        print("   Format: StudentName,https://github.com/user/repo")
+        print("3. Run: python grade.py -s /path/to/submissions.txt -o output_dir")
         print("\nSee QUICKSTART.md for detailed instructions.")
     else:
         print("❌ SOME CHECKS FAILED")

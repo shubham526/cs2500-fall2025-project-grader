@@ -116,10 +116,10 @@ if __name__ == "__main__":
     # Test Dijkstra's algorithm and calculate expected costs
     import sys
     sys.path.append('..')
-    from reference_implementation.graph import Graph
+    from graph import Graph
     
     g = Graph()
-    g.load_from_csv("reference_data/nodes.csv", "reference_data/edges.csv")
+    g.load_from_csv("../../data/nodes.csv", "../../data/edges.csv")
     
     print("Testing Dijkstra's Algorithm")
     print("="*60)

@@ -105,7 +105,7 @@ class Graph:
 if __name__ == "__main__":
     # Test the graph
     g = Graph()
-    g.load_from_csv("reference_data/nodes.csv", "reference_data/edges.csv")
+    g.load_from_csv("../../data/nodes.csv", "../../data/edges.csv")
     print(g)
     print(f"Node 1 neighbors: {g.get_neighbors(1)}")
     print(f"Edge weight 1->2: {g.get_edge_weight(1, 2)}")

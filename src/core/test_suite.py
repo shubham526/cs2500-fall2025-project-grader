@@ -310,11 +310,11 @@ class DijkstraTester:
 
     # Expected optimal costs (you'll need to update these based on your dataset)
     EXPECTED_COSTS = {
-        (1, 14): 42.0,  # Update these with actual optimal costs
-        (8, 9): 5.0,
-        (4, 13): 38.0,
-        (6, 10): 27.0,
-        (3, 11): 31.0
+        (1, 14): 113.0,  # Update these with actual optimal costs
+        (8, 9): 1.0,
+        (4, 13): 75.0,
+        (6, 10): 77.0,
+        (3, 11): 64.0
     }
 
     def __init__(self, dijkstra_module, graph):
