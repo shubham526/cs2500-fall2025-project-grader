@@ -4,6 +4,9 @@ Contains all automated tests for graph operations, Dijkstra, A*, and performance
 """
 
 import os
+import time
+import math
+from typing import Any, Dict, List, Tuple
 
 
 class GraphTester:
@@ -66,10 +69,20 @@ class GraphTester:
                     x = float(parts[2])
                     y = float(parts[3])
 
-                    if hasattr(self.graph, 'add_node'):
-                        self.graph.add_node(node_id, name, (x, y))
-                    elif hasattr(self.graph, 'addNode'):
+                    # Try different method signatures
+                    if hasattr(self.graph, 'addNode'):
+                        # Student API: addNode(id, name, (x,y))
                         self.graph.addNode(node_id, name, (x, y))
+                    elif hasattr(self.graph, 'add_node'):
+                        # Try tuple first (more Pythonic)
+                        try:
+                            self.graph.add_node(node_id, name, (x, y))
+                        except TypeError:
+                            # Fall back to 4 separate args
+                            try:
+                                self.graph.add_node(node_id, name, x, y)
+                            except:
+                                pass
 
         # Load edges
         with open(self.edges_file, 'r') as f:
@@ -81,10 +94,10 @@ class GraphTester:
                     to_node = int(parts[1])
                     weight = float(parts[2])
 
-                    if hasattr(self.graph, 'add_edge'):
-                        self.graph.add_edge(from_node, to_node, weight)
-                    elif hasattr(self.graph, 'addEdge'):
+                    if hasattr(self.graph, 'addEdge'):
                         self.graph.addEdge(from_node, to_node, weight)
+                    elif hasattr(self.graph, 'add_edge'):
+                        self.graph.add_edge(from_node, to_node, weight)
 
     def test_csv_parsing(self):
         """Test 1: CSV files are parsed correctly"""

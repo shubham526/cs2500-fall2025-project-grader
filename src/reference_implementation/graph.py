@@ -1,111 +1,185 @@
 """
-Reference Implementation: Graph Class
-This is a working implementation you can use to test the autograder
-and calculate expected optimal costs for the test queries.
+Graph Data Structure - Reference Implementation
+Matches CS 2500 Extra Credit Project Specification (Section 2.1.3)
 """
 
 import csv
-from typing import Dict, List, Tuple, Optional
 
 
 class Graph:
-    """Graph data structure for route planning"""
+    """
+    Graph data structure for representing weighted, directed graphs.
+    Supports nodes with coordinates and weighted edges.
+    """
 
     def __init__(self):
-        self.nodes: Dict[int, dict] = {}  # node_id -> {"name": str, "coords": (x, y)}
-        self.edges: Dict[int, Dict[int, float]] = {}  # from_id -> {to_id: weight}
+        """Initialize empty graph"""
+        # Store nodes: node_id -> (name, (x, y))
+        self.nodes = {}
+        # Adjacency list: node_id -> [(neighbor_id, weight), ...]
+        self.adj = {}
 
-    def load_from_csv(self, nodes_file: str, edges_file: str):
-        """Load graph data from CSV files"""
-        # Load nodes
-        with open(nodes_file, 'r') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                node_id = int(row['id'])
-                name = row['name']
-                x = float(row['x'])
-                y = float(row['y'])
-                self.add_node(node_id, name, (x, y))
+    def addNode(self, node_id, name, coordinates):
+        """
+        Add a new node to the graph.
 
-        # Load edges
-        with open(edges_file, 'r') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                from_node = int(row['from'])
-                to_node = int(row['to'])
-                weight = float(row['weight'])
-                self.add_edge(from_node, to_node, weight)
+        Args:
+            node_id (int): Unique identifier for the node
+            name (str): Name/label for the node
+            coordinates (tuple): (x, y) coordinates for A* heuristic
+        """
+        self.nodes[node_id] = (name, coordinates)
+        if node_id not in self.adj:
+            self.adj[node_id] = []
 
-    def add_node(self, node_id: int, name: str, coords: Tuple[float, float]):
-        """Add a node to the graph"""
-        self.nodes[node_id] = {
-            "name": name,
-            "coords": coords
-        }
-        if node_id not in self.edges:
-            self.edges[node_id] = {}
+    def addEdge(self, from_node, to_node, weight):
+        """
+        Add a directed edge from one node to another.
 
-    def remove_node(self, node_id: int):
-        """Remove a node from the graph"""
+        Args:
+            from_node (int): Source node ID
+            to_node (int): Destination node ID
+            weight (float): Edge weight (distance/cost)
+        """
+        if from_node not in self.adj:
+            self.adj[from_node] = []
+        self.adj[from_node].append((to_node, weight))
+
+    def removeNode(self, node_id):
+        """
+        Remove a node and all edges connected to it.
+
+        Args:
+            node_id (int): Node ID to remove
+        """
+        # Remove from nodes dict
         if node_id in self.nodes:
             del self.nodes[node_id]
 
-        if node_id in self.edges:
-            del self.edges[node_id]
+        # Remove from adjacency list
+        if node_id in self.adj:
+            del self.adj[node_id]
 
-        # Remove edges pointing to this node
-        for neighbors in self.edges.values():
-            if node_id in neighbors:
-                del neighbors[node_id]
+        # Remove all incoming edges to this node
+        for src in self.adj:
+            self.adj[src] = [(neighbor, weight) for neighbor, weight in self.adj[src]
+                             if neighbor != node_id]
 
-    def add_edge(self, from_id: int, to_id: int, weight: float):
-        """Add an edge to the graph"""
-        if from_id not in self.edges:
-            self.edges[from_id] = {}
-        self.edges[from_id][to_id] = weight
+    def removeEdge(self, from_node, to_node):
+        """
+        Remove a directed edge between two nodes.
 
-    def remove_edge(self, from_id: int, to_id: int):
-        """Remove an edge from the graph"""
-        if from_id in self.edges and to_id in self.edges[from_id]:
-            del self.edges[from_id][to_id]
+        Args:
+            from_node (int): Source node ID
+            to_node (int): Destination node ID
+        """
+        if from_node in self.adj:
+            self.adj[from_node] = [(neighbor, weight) for neighbor, weight in self.adj[from_node]
+                                   if neighbor != to_node]
 
-    def get_neighbors(self, node_id: int) -> List[int]:
-        """Get all neighbors of a node"""
-        return list(self.edges.get(node_id, {}).keys())
+    def getNeighbors(self, node_id):
+        """
+        Get all neighbors of a node.
 
-    def get_edge_weight(self, from_id: int, to_id: int) -> Optional[float]:
-        """Get the weight of an edge"""
-        return self.edges.get(from_id, {}).get(to_id)
+        Args:
+            node_id (int): Node ID
 
-    def get_node_coords(self, node_id: int) -> Optional[Tuple[float, float]]:
-        """Get coordinates of a node"""
-        node_data = self.nodes.get(node_id)
-        return node_data["coords"] if node_data else None
+        Returns:
+            list: List of (neighbor_id, weight) tuples
+        """
+        return self.adj.get(node_id, [])
 
-    def has_node(self, node_id: int) -> bool:
-        """Check if node exists"""
-        return node_id in self.nodes
+    def getEdgeWeight(self, from_node, to_node):
+        """
+        Get the weight of an edge between two nodes.
 
-    def has_edge(self, from_id: int, to_id: int) -> bool:
-        """Check if edge exists"""
-        return from_id in self.edges and to_id in self.edges[from_id]
+        Args:
+            from_node (int): Source node ID
+            to_node (int): Destination node ID
 
-    def num_nodes(self) -> int:
-        """Get number of nodes"""
+        Returns:
+            float: Edge weight, or None if edge doesn't exist
+        """
+        for neighbor, weight in self.adj.get(from_node, []):
+            if neighbor == to_node:
+                return weight
+        return None
+
+    def load_from_csv(self, nodes_path, edges_path):
+        """
+        Load graph data from CSV files.
+
+        Args:
+            nodes_path (str): Path to nodes.csv file
+            edges_path (str): Path to edges.csv file
+        """
+        # Load nodes from CSV
+        with open(nodes_path, 'r', newline='') as f:
+            reader = csv.reader(f)
+            next(reader, None)  # Skip header
+            for row in reader:
+                if not row:  # Skip empty rows
+                    continue
+                node_id = int(row[0])
+                name = row[1]
+                x = float(row[2])
+                y = float(row[3])
+                self.addNode(node_id, name, (x, y))
+
+        # Load edges from CSV
+        with open(edges_path, 'r', newline='') as f:
+            reader = csv.reader(f)
+            next(reader, None)  # Skip header
+            for row in reader:
+                if not row:  # Skip empty rows
+                    continue
+                from_node = int(row[0])
+                to_node = int(row[1])
+                weight = float(row[2])
+                self.addEdge(from_node, to_node, weight)
+
+    def num_nodes(self):
+        """Return the number of nodes in the graph"""
         return len(self.nodes)
 
-    def num_edges(self) -> int:
-        """Get number of edges"""
-        return sum(len(neighbors) for neighbors in self.edges.values())
+    def num_edges(self):
+        """Return the number of edges in the graph"""
+        return sum(len(neighbors) for neighbors in self.adj.values())
 
-    def __str__(self):
-        return f"Graph with {self.num_nodes()} nodes and {self.num_edges()} edges"
+    def has_node(self, node_id):
+        """Check if a node exists in the graph"""
+        return node_id in self.nodes
 
+    def has_edge(self, from_node, to_node):
+        """Check if an edge exists between two nodes"""
+        return self.getEdgeWeight(from_node, to_node) is not None
 
-if __name__ == "__main__":
-    # Test the graph
-    g = Graph()
-    g.load_from_csv("../../data/nodes.csv", "../../data/edges.csv")
-    print(g)
-    print(f"Node 1 neighbors: {g.get_neighbors(1)}")
-    print(f"Edge weight 1->2: {g.get_edge_weight(1, 2)}")
+    def get_node_coords(self, node_id):
+        """
+        Get the coordinates of a node.
+
+        Args:
+            node_id (int): Node ID
+
+        Returns:
+            tuple: (x, y) coordinates, or None if node doesn't exist
+        """
+        if node_id in self.nodes:
+            name, coords = self.nodes[node_id]
+            return coords
+        return None
+
+    def get_node_name(self, node_id):
+        """
+        Get the name of a node.
+
+        Args:
+            node_id (int): Node ID
+
+        Returns:
+            str: Node name, or None if node doesn't exist
+        """
+        if node_id in self.nodes:
+            name, coords = self.nodes[node_id]
+            return name
+        return None

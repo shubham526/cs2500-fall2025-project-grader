@@ -137,18 +137,54 @@ def generate_pdf_report(results, output_path):
     elements.append(Paragraph("1. FILE VALIDATION", heading2_style))
 
     files_found = results.get("files_found", {})
-    file_data = [["File", "Status"]]
+
+    # Check what's missing
+    critical_missing = []
+    optional_missing = []
+    for filename, exists in files_found.items():
+        if not exists:
+            if filename in ["graph.py", "dijkstra.py", "astar.py"]:
+                critical_missing.append(filename)
+            else:
+                optional_missing.append(filename)
+
+    # Add note about missing files
+    if critical_missing:
+        note_text = f"<font color='red'><b>⚠ Critical files missing:</b> {', '.join(critical_missing)}. Cannot grade code without these files.</font>"
+        elements.append(Paragraph(note_text, styles['Normal']))
+        elements.append(Spacer(1, 0.1 * inch))
+    elif optional_missing:
+        note_text = f"<font color='orange'><b>ℹ Note:</b> Missing optional files: {', '.join(optional_missing)}. Manual review required.</font>"
+        elements.append(Paragraph(note_text, styles['Normal']))
+        elements.append(Spacer(1, 0.1 * inch))
+    else:
+        note_text = "<font color='green'><b>✓</b> All required files present.</font>"
+        elements.append(Paragraph(note_text, styles['Normal']))
+        elements.append(Spacer(1, 0.1 * inch))
+
+    file_data = [["File", "Status", "Required For"]]
+    file_categories = {
+        "graph.py": "Automated grading",
+        "dijkstra.py": "Automated grading",
+        "astar.py": "Automated grading",
+        "main.py": "Manual review",
+        "DesignDocument.pdf": "Manual grading (20 pts)",
+        "README.md": "Manual review",
+        "nodes.csv": "Automated grading",
+        "edges.csv": "Automated grading"
+    }
+
     for filename, exists in files_found.items():
         status = "✓ Found" if exists else "✗ Missing"
-        color = colors.HexColor('#27ae60') if exists else colors.HexColor('#e74c3c')
-        file_data.append([filename, status])
+        category = file_categories.get(filename, "Manual review")
+        file_data.append([filename, status, category])
 
-    file_table = Table(file_data, colWidths=[3 * inch, 2 * inch])
+    file_table = Table(file_data, colWidths=[2 * inch, 1.5 * inch, 2.5 * inch])
     file_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#34495e')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('LEFTPADDING', (0, 0), (-1, -1), 8),

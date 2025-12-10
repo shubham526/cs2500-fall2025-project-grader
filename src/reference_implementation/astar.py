@@ -1,160 +1,140 @@
 """
-Reference Implementation: A* Algorithm
-This is a working implementation you can use to test the autograder.
+A* Search Algorithm - Reference Implementation
+CS 2500 Extra Credit Project
 """
 
 import heapq
-import math
-from typing import List, Tuple, Optional
+from math import inf, sqrt
 
 
-def euclidean_distance(coords1: Tuple[float, float], coords2: Tuple[float, float]) -> float:
-    """Calculate Euclidean distance between two points"""
-    x1, y1 = coords1
-    x2, y2 = coords2
-    return math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
-
-
-def astar(graph, start: int, end: int) -> Tuple[List[int], float, int]:
+def heuristic(graph, node, goal):
     """
-    Find shortest path using A* algorithm
-    
+    Heuristic function: Euclidean (straight-line) distance.
+    This is admissible because straight-line distance never overestimates
+    the actual path distance.
+
     Args:
-        graph: Graph instance
-        start: Starting node ID
-        end: Ending node ID
-    
+        graph: Graph object with get_node_coords() method
+        node (int): Current node ID
+        goal (int): Goal node ID
+
     Returns:
-        (path, cost, nodes_explored): 
-            - path: List of node IDs from start to end
-            - cost: Total cost of the path
-            - nodes_explored: Number of nodes examined
+        float: Estimated distance from node to goal
     """
-    # Get end coordinates for heuristic
-    end_coords = graph.get_node_coords(end)
-    if end_coords is None:
-        return None, float('infinity'), 0
-    
+    x1, y1 = graph.get_node_coords(node)
+    x2, y2 = graph.get_node_coords(goal)
+
+    return sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+
+
+def astar(graph, start, goal):
+    """
+    Find shortest path using A* search algorithm.
+
+    Args:
+        graph: Graph object with getNeighbors(node_id) and get_node_coords(node_id) methods
+        start (int): Starting node ID
+        goal (int): Goal node ID
+
+    Returns:
+        dict: Dictionary containing:
+            - 'path': List of node IDs in the shortest path
+            - 'cost': Total cost of the shortest path
+            - 'nodes_explored': Number of nodes explored
+    """
     # g(n): actual cost from start to n
-    g_scores = {node: float('infinity') for node in graph.nodes}
-    g_scores[start] = 0
-    
+    g = {node_id: inf for node_id in graph.nodes}
+    g[start] = 0
+
     # f(n) = g(n) + h(n): estimated total cost
-    # h(n): heuristic (Euclidean distance to goal)
-    def heuristic(node_id: int) -> float:
-        """Admissible heuristic: straight-line distance to goal"""
-        node_coords = graph.get_node_coords(node_id)
-        if node_coords is None:
-            return 0
-        return euclidean_distance(node_coords, end_coords)
-    
-    # Priority queue: (f_score, node_id)
-    # f_score = g_score + heuristic
-    start_h = heuristic(start)
-    pq = [(start_h, start)]
-    
+    f = {node_id: inf for node_id in graph.nodes}
+    f[start] = heuristic(graph, start, goal)
+
     # Track previous nodes for path reconstruction
-    previous = {node: None for node in graph.nodes}
-    
-    # Visited nodes
+    prev = {node_id: None for node_id in graph.nodes}
+
+    # Priority queue: (f_score, node_id)
+    pq = [(f[start], start)]
+
+    # Track visited nodes
     visited = set()
     nodes_explored = 0
-    
+
     while pq:
-        current_f, current_node = heapq.heappop(pq)
-        
+        current_f, u = heapq.heappop(pq)
+
         # Skip if already visited
-        if current_node in visited:
+        if u in visited:
             continue
-        
-        visited.add(current_node)
+
+        visited.add(u)
         nodes_explored += 1
-        
-        # Found the destination
-        if current_node == end:
+
+        # Check if we reached the goal
+        if u == goal:
             break
-        
+
         # Explore neighbors
-        for neighbor in graph.get_neighbors(current_node):
-            if neighbor in visited:
-                continue
-            
-            edge_weight = graph.get_edge_weight(current_node, neighbor)
-            if edge_weight is None:
-                continue
-            
-            # Calculate tentative g_score
-            tentative_g = g_scores[current_node] + edge_weight
-            
-            # Found a better path to neighbor
-            if tentative_g < g_scores[neighbor]:
-                g_scores[neighbor] = tentative_g
-                previous[neighbor] = current_node
-                
-                # f(n) = g(n) + h(n)
-                f_score = tentative_g + heuristic(neighbor)
-                heapq.heappush(pq, (f_score, neighbor))
-    
+        for neighbor, weight in graph.getNeighbors(u):
+            tentative_g = g[u] + weight
+
+            if tentative_g < g[neighbor]:
+                # This path to neighbor is better
+                g[neighbor] = tentative_g
+                f[neighbor] = tentative_g + heuristic(graph, neighbor, goal)
+                prev[neighbor] = u
+                heapq.heappush(pq, (f[neighbor], neighbor))
+
+    # Check if path exists
+    if g[goal] == inf:
+        return {
+            'path': [],
+            'cost': inf,
+            'nodes_explored': nodes_explored
+        }
+
     # Reconstruct path
     path = []
-    current = end
-    
-    if previous[current] is None and current != start:
-        # No path exists
-        return None, float('infinity'), nodes_explored
-    
+    current = goal
     while current is not None:
         path.append(current)
-        current = previous[current]
-    
+        current = prev[current]
     path.reverse()
-    
-    return path, g_scores[end], nodes_explored
+
+    return {
+        'path': path,
+        'cost': g[goal],
+        'nodes_explored': nodes_explored
+    }
 
 
 if __name__ == "__main__":
-    # Test A* algorithm
-    import sys
-    sys.path.append('..')
+    """Test A* algorithm"""
     from graph import Graph
-    from dijkstra import dijkstra
-    
+
+    # Load graph
     g = Graph()
     g.load_from_csv("../../data/nodes.csv", "../../data/edges.csv")
-    
-    print("Testing A* Algorithm")
-    print("="*60)
-    
-    # Test queries
+
+    print("Testing A* Search Algorithm")
+    print("=" * 60)
+    print(f"Graph loaded: {g.num_nodes()} nodes, {g.num_edges()} edges\n")
+
+    # Required test queries
     queries = [
-        (1, 14, "Main Gateway → Parking Garage"),
-        (8, 9, "Student Center → Cafe"),
-        (4, 13, "CS Department → Dorm B"),
-        (6, 10, "Physics Building → Gymnasium"),
-        (3, 11, "Library → Aquatic Center")
+        (1, 14),  # Main Gateway → Parking Garage (Long Path)
+        (8, 9),  # Student Center → Cafe (Short Path)
+        (4, 13),  # CS Department → Dorm B (Cross-Map)
+        (6, 10),  # Physics Building → Gymnasium (Winding Path)
+        (3, 11),  # Library → Aquatic Center (Medium Path)
     ]
-    
-    print("\nComparison: Dijkstra vs A*")
-    print("-"*60)
-    
-    for start, end, description in queries:
-        # Run Dijkstra
-        d_path, d_cost, d_nodes = dijkstra(g, start, end)
-        
-        # Run A*
-        a_path, a_cost, a_nodes = astar(g, start, end)
-        
-        print(f"\n{description}")
-        print(f"  Dijkstra: cost={d_cost:.1f}, nodes={d_nodes}")
-        print(f"  A*:       cost={a_cost:.1f}, nodes={a_nodes}")
-        
-        # Calculate improvement
-        if d_nodes > 0:
-            improvement = (d_nodes - a_nodes) / d_nodes * 100
-            print(f"  A* explores {improvement:.1f}% fewer nodes")
-        
-        # Verify both find same optimal cost
-        if abs(d_cost - a_cost) < 0.01:
-            print(f"  ✓ Both found optimal path")
-        else:
-            print(f"  ✗ WARNING: Costs differ!")
+
+    # Test each query
+    for start, goal in queries:
+        result = astar(g, start, goal)
+
+        print(f"Query: {start} → {goal}")
+        print(f"  Path: {' → '.join(map(str, result['path']))}")
+        print(f"  Cost: {result['cost']}")
+        print(f"  Nodes explored: {result['nodes_explored']}")
+        print()

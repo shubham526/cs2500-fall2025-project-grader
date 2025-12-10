@@ -24,14 +24,26 @@ from report_generator import generate_pdf_report
 class Autograder:
     """Main autograder class that orchestrates the testing process"""
 
-    def __init__(self, submissions_file, output_dir):
+    def __init__(self, submissions_file=None, output_dir="grading_reports", dataset_dir=None):
         self.submissions_file = submissions_file
         self.output_dir = output_dir
+        self.dataset_dir = dataset_dir
         self.results = []
 
-        # Validate submissions file exists
-        if not os.path.exists(submissions_file):
+        # Validate submissions file exists (if provided)
+        if submissions_file and not os.path.exists(submissions_file):
             raise FileNotFoundError(f"Submissions file not found: {submissions_file}")
+
+        # Validate dataset directory (if provided)
+        if dataset_dir:
+            if not os.path.exists(dataset_dir):
+                raise FileNotFoundError(f"Dataset directory not found: {dataset_dir}")
+            nodes_csv = os.path.join(dataset_dir, "nodes.csv")
+            edges_csv = os.path.join(dataset_dir, "edges.csv")
+            if not os.path.exists(nodes_csv):
+                raise FileNotFoundError(f"nodes.csv not found in dataset directory: {nodes_csv}")
+            if not os.path.exists(edges_csv):
+                raise FileNotFoundError(f"edges.csv not found in dataset directory: {edges_csv}")
 
         # Create output directory
         Path(output_dir).mkdir(parents=True, exist_ok=True)
@@ -115,16 +127,48 @@ class Autograder:
             "errors": []
         }
 
+        # If dataset directory provided, copy CSV files to student repo
+        if self.dataset_dir:
+            print(f"\nUsing shared dataset from: {self.dataset_dir}")
+            try:
+                src_nodes = os.path.join(self.dataset_dir, "nodes.csv")
+                src_edges = os.path.join(self.dataset_dir, "edges.csv")
+                dst_nodes = os.path.join(repo_dir, "nodes.csv")
+                dst_edges = os.path.join(repo_dir, "edges.csv")
+
+                shutil.copy2(src_nodes, dst_nodes)
+                shutil.copy2(src_edges, dst_edges)
+                print(f"  ✓ Copied nodes.csv and edges.csv to student repo")
+            except Exception as e:
+                results["errors"].append(f"Failed to copy dataset: {str(e)}")
+                print(f"  ❌ Failed to copy dataset: {str(e)}")
+                return results
+
         # Step 1: Verify required files
         print("\n[1/6] Checking required files...")
         results["files_found"] = self.verify_required_files(repo_dir)
 
-        missing_files = [f for f, exists in results["files_found"].items() if not exists]
-        if missing_files:
-            results["errors"].append(f"Missing files: {', '.join(missing_files)}")
-            print(f"  ❌ Missing files: {', '.join(missing_files)}")
+        # Categorize missing files
+        critical_files = ["graph.py", "dijkstra.py", "astar.py"]
+        optional_files = ["main.py", "DesignDocument.pdf", "README.md", "nodes.csv", "edges.csv"]
+
+        missing_critical = [f for f in critical_files if not results["files_found"].get(f, False)]
+        missing_optional = [f for f in optional_files if not results["files_found"].get(f, False)]
+
+        # Only stop if critical Python files are missing
+        if missing_critical:
+            results["errors"].append(f"Missing critical files: {', '.join(missing_critical)}")
+            print(f"  ❌ Missing critical files: {', '.join(missing_critical)}")
+            print(f"     Cannot grade without these files.")
             return results
-        print("  ✓ All required files found")
+
+        # Note optional missing files but continue
+        if missing_optional:
+            results["errors"].append(f"Missing optional files: {', '.join(missing_optional)}")
+            print(f"  ⚠️  Missing files: {', '.join(missing_optional)}")
+            print(f"     (Continuing with code grading)")
+        else:
+            print("  ✓ All required files found")
 
         # Step 2: Load student modules
         print("\n[2/6] Loading student code...")
@@ -313,6 +357,55 @@ class Autograder:
 
         return round(score, 1)
 
+    def grade_single_directory(self, repo_dir, student_name=None):
+        """
+        Grade a single directory (already cloned repo)
+
+        Args:
+            repo_dir: Path to the repository directory
+            student_name: Optional student name (defaults to directory name)
+
+        Returns:
+            dict: Grading results
+        """
+        repo_path = Path(repo_dir).resolve()
+
+        if not repo_path.exists():
+            print(f"\n❌ Error: Directory not found: {repo_dir}")
+            return None
+
+        if not repo_path.is_dir():
+            print(f"\n❌ Error: Not a directory: {repo_dir}")
+            return None
+
+        # Use directory name as student name if not provided
+        if student_name is None:
+            student_name = repo_path.name.replace('-', ' ').replace('_', ' ').title()
+
+        print(f"\n{'=' * 60}")
+        print(f"Grading: {student_name}")
+        print(f"Directory: {repo_path}")
+        print(f"{'=' * 60}")
+
+        # Run tests on this directory
+        results = self.run_tests_on_submission(str(repo_path), student_name)
+        results["repo_url"] = f"Local: {repo_path}"
+
+        # Generate PDF report
+        print(f"\nGenerating PDF report...")
+        pdf_path = os.path.join(self.output_dir, f"{student_name.replace(' ', '_')}_report.pdf")
+        generate_pdf_report(results, pdf_path)
+        print(f"  ✓ Report saved: {pdf_path}")
+
+        # Save JSON results
+        json_path = os.path.join(self.output_dir, f"{student_name.replace(' ', '_')}_results.json")
+        with open(json_path, 'w') as f:
+            json.dump(results, f, indent=2)
+
+        self.results.append(results)
+
+        return results
+
     def grade_all_submissions(self):
         """Grade all submissions from the submissions file"""
 
@@ -441,35 +534,52 @@ def parse_arguments():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Use defaults (submissions.txt and grading_reports/)
-  python autograder.py
+  # Grade all submissions from file
+  python autograder.py -s submissions.txt -o grading_reports
 
-  # Specify submissions file only
-  python autograder.py -s /path/to/submissions.txt
+  # Grade a single local directory
+  python autograder.py -d /path/to/student/repo -o output_dir
 
-  # Specify output directory only
-  python autograder.py -o /path/to/output
+  # Specify dataset location (if not in student repos)
+  python autograder.py -d ./student-repo -o reports --dataset /path/to/data
 
-  # Specify both
-  python autograder.py -s ~/submissions.txt -o ~/grading_output
-
-  # Full paths
-  python autograder.py --submissions /home/user/fall2025/submissions.txt --output /home/user/reports
+  # Grade with shared dataset for all students
+  python autograder.py -s submissions.txt -o reports --dataset ~/cs2500-data
         """
     )
 
-    parser.add_argument(
+    # Create mutually exclusive group for input methods
+    input_group = parser.add_mutually_exclusive_group(required=True)
+
+    input_group.add_argument(
         '-s', '--submissions',
         type=str,
-        default='submissions.txt',
-        help='Path to submissions file (default: submissions.txt in current directory)'
+        help='Path to submissions file with format: StudentName,RepoURL'
+    )
+
+    input_group.add_argument(
+        '-d', '--dir',
+        type=str,
+        help='Grade a single directory (already cloned repo)'
+    )
+
+    parser.add_argument(
+        '-n', '--name',
+        type=str,
+        help='Student name (only used with --dir, optional)'
     )
 
     parser.add_argument(
         '-o', '--output',
         type=str,
         default='grading_reports',
-        help='Path to output directory for reports (default: grading_reports/ in current directory)'
+        help='Path to output directory for reports (default: grading_reports/)'
+    )
+
+    parser.add_argument(
+        '--dataset',
+        type=str,
+        help='Path to directory containing nodes.csv and edges.csv (if not in student repos)'
     )
 
     parser.add_argument(
@@ -495,36 +605,78 @@ def main():
 ╚══════════════════════════════════════════════════════════╝
     """)
 
-    print(f"Configuration:")
-    print(f"  Submissions file: {os.path.abspath(args.submissions)}")
-    print(f"  Output directory: {os.path.abspath(args.output)}")
-    print()
+    # Determine mode
+    if args.dir:
+        # Single directory mode
+        print(f"Mode: Single Directory")
+        print(f"  Directory: {os.path.abspath(args.dir)}")
+        print(f"  Student: {args.name if args.name else '(auto-detect from directory name)'}")
+        print(f"  Output: {os.path.abspath(args.output)}")
+        if args.dataset:
+            print(f"  Dataset: {os.path.abspath(args.dataset)}")
+        print()
 
-    try:
-        # Create autograder instance
-        autograder = Autograder(
-            submissions_file=args.submissions,
-            output_dir=args.output
-        )
+        try:
+            # Create autograder instance (no submissions file needed)
+            autograder = Autograder(
+                submissions_file=None,
+                output_dir=args.output,
+                dataset_dir=args.dataset
+            )
 
-        # Grade all submissions
-        autograder.grade_all_submissions()
+            # Grade single directory
+            result = autograder.grade_single_directory(args.dir, args.name)
 
-        print("\n" + "=" * 60)
-        print("GRADING COMPLETE!")
-        print("=" * 60)
-        print(f"\nReports saved to: {os.path.abspath(args.output)}")
+            if result:
+                print("\n" + "=" * 60)
+                print("GRADING COMPLETE!")
+                print("=" * 60)
+                print(f"\nAutomated Score: {result['automated_score']}/{result['max_automated_score']}")
+                print(f"Report saved to: {os.path.abspath(args.output)}")
+            else:
+                print("\n❌ Grading failed - see errors above")
+                sys.exit(1)
 
-    except FileNotFoundError as e:
-        print(f"\n❌ Error: {e}")
-        print(f"\nPlease create the submissions file or specify a different path:")
-        print(f"  python autograder.py --submissions /path/to/your/submissions.txt")
-        sys.exit(1)
+        except Exception as e:
+            print(f"\n❌ Unexpected error: {e}")
+            traceback.print_exc()
+            sys.exit(1)
 
-    except Exception as e:
-        print(f"\n❌ Unexpected error: {e}")
-        traceback.print_exc()
-        sys.exit(1)
+    else:
+        # Batch mode with submissions file
+        print(f"Mode: Batch Grading")
+        print(f"  Submissions file: {os.path.abspath(args.submissions)}")
+        print(f"  Output directory: {os.path.abspath(args.output)}")
+        if args.dataset:
+            print(f"  Dataset: {os.path.abspath(args.dataset)}")
+        print()
+
+        try:
+            # Create autograder instance
+            autograder = Autograder(
+                submissions_file=args.submissions,
+                output_dir=args.output,
+                dataset_dir=args.dataset
+            )
+
+            # Grade all submissions
+            autograder.grade_all_submissions()
+
+            print("\n" + "=" * 60)
+            print("GRADING COMPLETE!")
+            print("=" * 60)
+            print(f"\nReports saved to: {os.path.abspath(args.output)}")
+
+        except FileNotFoundError as e:
+            print(f"\n❌ Error: {e}")
+            print(f"\nPlease create the submissions file or specify a different path:")
+            print(f"  python autograder.py --submissions /path/to/your/submissions.txt")
+            sys.exit(1)
+
+        except Exception as e:
+            print(f"\n❌ Unexpected error: {e}")
+            traceback.print_exc()
+            sys.exit(1)
 
 
 if __name__ == "__main__":

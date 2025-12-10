@@ -1,137 +1,159 @@
 """
-Reference Implementation: Dijkstra's Algorithm
-This is a working implementation you can use to test the autograder
-and calculate expected optimal costs.
+Dijkstra's Algorithm - Reference Implementation
+CS 2500 Extra Credit Project
 """
 
 import heapq
-from typing import List, Tuple, Optional, Dict
+from math import inf
 
 
-def dijkstra(graph, start: int, end: int) -> Tuple[List[int], float, int]:
+def dijkstra(graph, start, goal):
     """
-    Find shortest path using Dijkstra's algorithm
-    
+    Find shortest path using Dijkstra's algorithm.
+
     Args:
-        graph: Graph instance
-        start: Starting node ID
-        end: Ending node ID
-    
+        graph: Graph object with getNeighbors(node_id) method
+        start (int): Starting node ID
+        goal (int): Goal node ID
+
     Returns:
-        (path, cost, nodes_explored): 
-            - path: List of node IDs from start to end
-            - cost: Total cost of the path
-            - nodes_explored: Number of nodes examined
+        dict: Dictionary containing:
+            - 'path': List of node IDs in the shortest path
+            - 'cost': Total cost of the shortest path
+            - 'nodes_explored': Number of nodes explored
     """
-    # Initialize
-    distances = {node: float('infinity') for node in graph.nodes}
-    distances[start] = 0
-    
-    previous = {node: None for node in graph.nodes}
-    
+    # Initialize distances
+    dist = {node_id: inf for node_id in graph.nodes}
+    dist[start] = 0
+
+    # Track previous nodes for path reconstruction
+    prev = {node_id: None for node_id in graph.nodes}
+
     # Priority queue: (distance, node_id)
     pq = [(0, start)]
-    
+
+    # Track visited nodes
     visited = set()
     nodes_explored = 0
-    
+
     while pq:
-        current_dist, current_node = heapq.heappop(pq)
-        
+        current_dist, u = heapq.heappop(pq)
+
         # Skip if already visited
-        if current_node in visited:
+        if u in visited:
             continue
-        
-        visited.add(current_node)
+
+        visited.add(u)
         nodes_explored += 1
-        
-        # Found the destination
-        if current_node == end:
+
+        # Early exit if we reached the goal
+        if u == goal:
             break
-        
-        # Check if current distance is outdated
-        if current_dist > distances[current_node]:
-            continue
-        
+
         # Explore neighbors
-        for neighbor in graph.get_neighbors(current_node):
-            edge_weight = graph.get_edge_weight(current_node, neighbor)
-            
-            if edge_weight is None:
+        for neighbor, weight in graph.getNeighbors(u):
+            if neighbor in visited:
                 continue
-            
-            distance = current_dist + edge_weight
-            
-            # Found a shorter path to neighbor
-            if distance < distances[neighbor]:
-                distances[neighbor] = distance
-                previous[neighbor] = current_node
-                heapq.heappush(pq, (distance, neighbor))
-    
+
+            new_dist = current_dist + weight
+
+            if new_dist < dist[neighbor]:
+                dist[neighbor] = new_dist
+                prev[neighbor] = u
+                heapq.heappush(pq, (new_dist, neighbor))
+
+    # Check if path exists
+    if dist[goal] == inf:
+        return {
+            'path': [],
+            'cost': inf,
+            'nodes_explored': nodes_explored
+        }
+
     # Reconstruct path
     path = []
-    current = end
-    
-    if previous[current] is None and current != start:
-        # No path exists
-        return None, float('infinity'), nodes_explored
-    
+    current = goal
     while current is not None:
         path.append(current)
-        current = previous[current]
-    
+        current = prev[current]
     path.reverse()
-    
-    return path, distances[end], nodes_explored
+
+    return {
+        'path': path,
+        'cost': dist[goal],
+        'nodes_explored': nodes_explored
+    }
 
 
-def calculate_expected_costs(graph):
+def calculate_expected_costs(graph, queries):
     """
-    Calculate expected costs for all required test queries
-    Use this to update EXPECTED_COSTS in test_suite.py
+    Calculate expected costs for test queries.
+    Use this to generate EXPECTED_COSTS for test_suite.py
+
+    Args:
+        graph: Graph object
+        queries: List of (start, goal) tuples
+
+    Returns:
+        dict: Dictionary mapping (start, goal) to cost
     """
-    # Required queries from project spec
-    queries = [
-        (1, 14, "Main Gateway → Parking Garage (Long Path)"),
-        (8, 9, "Student Center → Cafe (Short Path)"),
-        (4, 13, "CS Department → Dorm B (Cross-Map)"),
-        (6, 10, "Physics Building → Gymnasium (Winding Path)"),
-        (3, 11, "Library → Aquatic Center (Medium Path)")
-    ]
-    
-    print("EXPECTED COSTS FOR TEST QUERIES:")
-    print("="*60)
+    print("\nEXPECTED COSTS FOR TEST QUERIES:")
+    print("=" * 60)
     print("Copy these values to test_suite.py -> EXPECTED_COSTS\n")
-    
     print("EXPECTED_COSTS = {")
-    for start, end, description in queries:
-        path, cost, nodes = dijkstra(graph, start, end)
-        print(f"    ({start}, {end}): {cost},  # {description}")
-        print(f"    #   Path: {' → '.join(map(str, path))}")
-        print(f"    #   Nodes explored: {nodes}\n")
+
+    expected_costs = {}
+
+    for start, goal in queries:
+        result = dijkstra(graph, start, goal)
+        cost = result['cost']
+        path = result['path']
+        nodes_explored = result['nodes_explored']
+
+        expected_costs[(start, goal)] = cost
+
+        # Format with comment showing path
+        path_str = " → ".join(map(str, path))
+        print(f"    ({start}, {goal}): {cost},  # {graph.get_node_name(start)} → {graph.get_node_name(goal)}")
+        print(f"    #   Path: {path_str}")
+        print(f"    #   Nodes explored: {nodes_explored}")
+        print()
+
     print("}")
+
+    return expected_costs
 
 
 if __name__ == "__main__":
-    # Test Dijkstra's algorithm and calculate expected costs
-    import sys
-    sys.path.append('..')
+    """Test Dijkstra's algorithm and calculate expected costs"""
     from graph import Graph
-    
+
+    # Load graph
     g = Graph()
     g.load_from_csv("../../data/nodes.csv", "../../data/edges.csv")
-    
+
     print("Testing Dijkstra's Algorithm")
-    print("="*60)
-    
-    # Test a simple query
-    path, cost, nodes = dijkstra(g, 1, 14)
-    print(f"\nQuery: 1 → 14")
-    print(f"Path: {' → '.join(map(str, path))}")
-    print(f"Cost: {cost}")
-    print(f"Nodes explored: {nodes}")
-    
-    print("\n")
-    
-    # Calculate all expected costs
-    calculate_expected_costs(g)
+    print("=" * 60)
+    print(f"Graph loaded: {g.num_nodes()} nodes, {g.num_edges()} edges\n")
+
+    # Required test queries from project spec
+    queries = [
+        (1, 14),  # Main Gateway → Parking Garage (Long Path)
+        (8, 9),  # Student Center → Cafe (Short Path)
+        (4, 13),  # CS Department → Dorm B (Cross-Map)
+        (6, 10),  # Physics Building → Gymnasium (Winding Path)
+        (3, 11),  # Library → Aquatic Center (Medium Path)
+    ]
+
+    # Test each query
+    for start, goal in queries:
+        result = dijkstra(g, start, goal)
+
+        print(f"Query: {start} → {goal}")
+        print(f"  Path: {' → '.join(map(str, result['path']))}")
+        print(f"  Cost: {result['cost']}")
+        print(f"  Nodes explored: {result['nodes_explored']}")
+        print()
+
+    # Calculate expected costs for test suite
+    calculate_expected_costs(g, queries)
