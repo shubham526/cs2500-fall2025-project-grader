@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+
+# PyCharm
+.idea/
+*.iml
+
+# Grading outputs (keep private)
+grading_reports/
+*_report.pdf
+*_results.json
+grading_summary.txt
+
+# Temporary files
+*.tmp
+.DS_Store
+*~
+temp_repos/
+
+# Student submissions (optional - if you want to keep this out of git)
+# submissions.txt
