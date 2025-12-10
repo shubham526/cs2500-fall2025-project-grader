@@ -11,31 +11,30 @@ import subprocess
 import shutil
 import tempfile
 import importlib.util
+import argparse
 from datetime import datetime
 from pathlib import Path
 import traceback
 
-project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root))
-
-
-# Now you can import
-from src.core.test_suite import GraphTester, DijkstraTester, AStarTester, PerformanceTester
-from src.core.report_generator import generate_pdf_report
-
-
+# Test imports
+from test_suite import GraphTester, DijkstraTester, AStarTester, PerformanceTester
+from report_generator import generate_pdf_report
 
 
 class Autograder:
     """Main autograder class that orchestrates the testing process"""
 
-    def __init__(self, submissions_file="submissions.txt", output_dir="grading_reports"):
+    def __init__(self, submissions_file, output_dir):
         self.submissions_file = submissions_file
         self.output_dir = output_dir
         self.results = []
 
+        # Validate submissions file exists
+        if not os.path.exists(submissions_file):
+            raise FileNotFoundError(f"Submissions file not found: {submissions_file}")
+
         # Create output directory
-        Path(output_dir).mkdir(exist_ok=True)
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     def clone_repository(self, repo_url, dest_dir):
         """Clone a GitHub repository"""
@@ -435,8 +434,59 @@ class Autograder:
         print(f"All reports saved to: {self.output_dir}/")
 
 
+def parse_arguments():
+    """Parse command-line arguments"""
+    parser = argparse.ArgumentParser(
+        description='CS 2500 Extra Credit Project Autograder',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Use defaults (submissions.txt and grading_reports/)
+  python autograder.py
+
+  # Specify submissions file only
+  python autograder.py -s /path/to/submissions.txt
+
+  # Specify output directory only
+  python autograder.py -o /path/to/output
+
+  # Specify both
+  python autograder.py -s ~/submissions.txt -o ~/grading_output
+
+  # Full paths
+  python autograder.py --submissions /home/user/fall2025/submissions.txt --output /home/user/reports
+        """
+    )
+
+    parser.add_argument(
+        '-s', '--submissions',
+        type=str,
+        default='submissions.txt',
+        help='Path to submissions file (default: submissions.txt in current directory)'
+    )
+
+    parser.add_argument(
+        '-o', '--output',
+        type=str,
+        default='grading_reports',
+        help='Path to output directory for reports (default: grading_reports/ in current directory)'
+    )
+
+    parser.add_argument(
+        '-v', '--verbose',
+        action='store_true',
+        help='Enable verbose output'
+    )
+
+    return parser.parse_args()
+
+
 def main():
     """Main entry point"""
+
+    # Parse arguments
+    args = parse_arguments()
+
     print("""
 ╔══════════════════════════════════════════════════════════╗
 ║  CS 2500 - Extra Credit Project Autograder              ║
@@ -445,18 +495,36 @@ def main():
 ╚══════════════════════════════════════════════════════════╝
     """)
 
-    # Create autograder instance
-    autograder = Autograder(
-        submissions_file="submissions.txt",
-        output_dir="grading_reports"
-    )
+    print(f"Configuration:")
+    print(f"  Submissions file: {os.path.abspath(args.submissions)}")
+    print(f"  Output directory: {os.path.abspath(args.output)}")
+    print()
 
-    # Grade all submissions
-    autograder.grade_all_submissions()
+    try:
+        # Create autograder instance
+        autograder = Autograder(
+            submissions_file=args.submissions,
+            output_dir=args.output
+        )
 
-    print("\n" + "=" * 60)
-    print("GRADING COMPLETE!")
-    print("=" * 60)
+        # Grade all submissions
+        autograder.grade_all_submissions()
+
+        print("\n" + "=" * 60)
+        print("GRADING COMPLETE!")
+        print("=" * 60)
+        print(f"\nReports saved to: {os.path.abspath(args.output)}")
+
+    except FileNotFoundError as e:
+        print(f"\n❌ Error: {e}")
+        print(f"\nPlease create the submissions file or specify a different path:")
+        print(f"  python autograder.py --submissions /path/to/your/submissions.txt")
+        sys.exit(1)
+
+    except Exception as e:
+        print(f"\n❌ Unexpected error: {e}")
+        traceback.print_exc()
+        sys.exit(1)
 
 
 if __name__ == "__main__":
