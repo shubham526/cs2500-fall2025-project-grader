@@ -2,12 +2,17 @@
 
 ## First-Time Setup (5 minutes)
 
-### Step 1: Calculate Expected Costs
+### Step 1: Install Dependencies
+```bash
+pip install reportlab
+```
+
+### Step 2: Calculate Expected Costs
 
 Before you can grade student submissions, you need to know the optimal costs for each test query.
 
 ```bash
-cd reference_implementation
+cd src/reference_implementation
 python dijkstra.py
 ```
 
@@ -25,9 +30,9 @@ EXPECTED_COSTS = {
 }
 ```
 
-### Step 2: Update Expected Costs
+### Step 3: Update Expected Costs
 
-Open `test_suite.py` and find these lines (around line 180):
+Open `src/core/test_suite.py` and find these lines (around line 180):
 
 ```python
 # Expected optimal costs (you'll need to update these based on your dataset)
@@ -40,82 +45,157 @@ EXPECTED_COSTS = {
 }
 ```
 
-Replace with the values from Step 1.
+Replace with the values from Step 2.
 
-### Step 3: Test the Autograder
+### Step 4: Create Submissions File
+
+Create `submissions.txt` in the project root:
+
+```txt
+# Format: StudentName,GitHubURL
+John Doe,https://github.com/johndoe/cs2500-project
+Jane Smith,https://github.com/janesmith/cs2500-extra-credit
+```
+
+### Step 5: Run the Autograder
+
+**Basic usage (defaults):**
+```bash
+# From project root
+python grade.py
+
+# Uses submissions.txt and outputs to grading_reports/
+```
+
+**With custom paths:**
+```bash
+python grade.py \
+  --submissions ~/Desktop/submissions.txt \
+  --output ~/Documents/grading_reports
+```
+
+**Short form:**
+```bash
+python grade.py -s submissions.txt -o reports
+```
+
+### Step 6: Review Reports
+
+Check your output directory for PDF reports:
+```bash
+ls grading_reports/
+# or
+ls ~/Documents/grading_reports/  # if you used custom path
+```
+
+## Command-Line Options
+
+```bash
+# Get help
+python grade.py --help
+
+# Specify submissions file
+python grade.py --submissions /path/to/submissions.txt
+
+# Specify output directory
+python grade.py --output /path/to/output
+
+# Specify both
+python grade.py -s submissions.txt -o ~/grading_reports
+```
+
+## Testing Without Cloning Repos
 
 Create a test submission to verify everything works:
 
 ```bash
-# 1. Create a test repository
-mkdir test_student
-cp reference_implementation/* test_student/
-cp reference_data/*.csv test_student/
+# 1. Create test_submission.txt
+echo "Test Student,$(pwd)/src/reference_implementation" > test_submission.txt
 
-# 2. Add to submissions.txt
-echo "Test Student,/path/to/test_student" >> submissions.txt
+# 2. Run autograder on test
+python grade.py -s test_submission.txt -o test_output
 
-# 3. Run autograder
-python autograder.py
+# 3. Check the report
+open test_output/Test_Student_report.pdf  # Mac
+# or
+xdg-open test_output/Test_Student_report.pdf  # Linux
 ```
 
-Check `grading_reports/Test_Student_report.pdf` - it should show perfect scores!
+The test should show perfect scores since you're grading the reference implementation!
 
-### Step 4: Ready for Real Grading
+## Ready for Real Grading
 
-1. Clear submissions.txt (remove test entry)
-2. Add real student GitHub URLs
-3. Run `python autograder.py`
+1. Clear test files:
+   ```bash
+   rm test_submission.txt
+   rm -rf test_output/
+   ```
+
+2. Add real student GitHub URLs to `submissions.txt`
+
+3. Run autograder:
+   ```bash
+   python grade.py
+   ```
+
 4. Review PDF reports in `grading_reports/`
 
-## Testing Without Cloning Repos
+## PyCharm Setup
 
-If you want to test locally without cloning:
+### Option 1: Run grade.py Directly
+1. Right-click `grade.py` in the project explorer
+2. Click "Run 'grade'"
+3. Done!
 
-```bash
-# Use local file paths instead of GitHub URLs
-echo "Local Test,/absolute/path/to/local/project" >> submissions.txt
-python autograder.py
-```
-
-The autograder will skip the git clone step if the path already exists.
+### Option 2: Create Run Configuration
+1. Run → Edit Configurations
+2. Click + → Python
+3. Set:
+   - Name: "Grade Students"
+   - Script path: `[YOUR_PROJECT]/grade.py`
+   - Parameters: `-s submissions.txt -o grading_reports`
+   - Working directory: `[YOUR_PROJECT]`
+4. Click OK
+5. Use the green play button to run
 
 ## Common Issues
 
-**Issue**: "No module named 'reportlab'"
+**Issue**: "Submissions file not found"
+```bash
+# Solution: Specify the correct path
+python grade.py --submissions /full/path/to/submissions.txt
+```
+
+**Issue**: Expected costs don't match
+```bash
+# Solution: Recalculate
+cd src/reference_implementation
+python dijkstra.py
+# Copy output to src/core/test_suite.py
+```
+
+**Issue**: "No module named reportlab"
 ```bash
 pip install reportlab
 ```
 
-**Issue**: Expected costs don't match
-- Run `reference_implementation/dijkstra.py` to recalculate
-- Make sure you're using the same nodes.csv and edges.csv as students
-
-**Issue**: Student code won't load
-- Check the error in the PDF report
-- Student may have syntax errors or different file structure
-- This is expected for broken submissions
-
-## What to Check in PDF Reports
-
-✅ **Automated Score**: Out of 55 points
-
-✅ **Test Results**: Which tests passed/failed
-
-✅ **Flags**: Priority queue usage, comment density, etc.
-
-✅ **Manual Review Checklist**: What you still need to grade
-
 ## Next Steps
 
-See the main [README.md](README.md) for:
-- Detailed usage instructions
+See [CLI_USAGE.md](CLI_USAGE.md) for:
+- Detailed command-line examples
+- Advanced workflows
+- PyCharm integration
+- Security best practices
+
+See [README.md](README.md) for:
+- Complete documentation
 - Customization options
 - Manual grading workflow
-- Troubleshooting guide
 
 ---
 
-**Estimated setup time**: 5-10 minutes
-**Grading time per student**: ~2 min automated + ~23 min manual = ~25 min total
+**Estimated setup time**: 5-10 minutes  
+**Grading time per student**: ~2 min automated + ~23 min manual = ~25 min total  
 **Time saved**: ~20 min per student vs. fully manual grading
+
+No config files needed - everything via command line! 🎉
