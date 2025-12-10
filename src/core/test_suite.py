@@ -6,6 +6,7 @@ Contains all automated tests for graph operations, Dijkstra, A*, and performance
 import os
 import time
 import math
+import inspect
 from typing import Any, Dict, List, Tuple
 
 
@@ -40,9 +41,11 @@ class GraphTester:
                         self.graph = attr()
                         break
 
-            # Try to load CSV data
+            # Try to load CSV data using various common names
             if hasattr(self.graph, 'load_from_csv'):
                 self.graph.load_from_csv(self.nodes_file, self.edges_file)
+            elif hasattr(self.graph, 'loadFromCSV'):
+                self.graph.loadFromCSV(self.nodes_file, self.edges_file)
             elif hasattr(self.graph, 'load_data'):
                 self.graph.load_data(self.nodes_file, self.edges_file)
             elif hasattr(self.graph, 'parse_csv'):
@@ -58,6 +61,21 @@ class GraphTester:
 
     def _manual_load_csv(self):
         """Manually load CSV files if no built-in method"""
+
+        # Helper to find the addNode method
+        add_node_method = None
+        if hasattr(self.graph, 'addNode'):
+            add_node_method = self.graph.addNode
+        elif hasattr(self.graph, 'add_node'):
+            add_node_method = self.graph.add_node
+
+        # Helper to find the addEdge method
+        add_edge_method = None
+        if hasattr(self.graph, 'addEdge'):
+            add_edge_method = self.graph.addEdge
+        elif hasattr(self.graph, 'add_edge'):
+            add_edge_method = self.graph.add_edge
+
         # Load nodes
         with open(self.nodes_file, 'r') as f:
             lines = f.readlines()
@@ -69,18 +87,44 @@ class GraphTester:
                     x = float(parts[2])
                     y = float(parts[3])
 
-                    # Try different method signatures
-                    if hasattr(self.graph, 'addNode'):
-                        # Student API: addNode(id, name, (x,y))
-                        self.graph.addNode(node_id, name, (x, y))
-                    elif hasattr(self.graph, 'add_node'):
-                        # Try tuple first (more Pythonic)
+                    if add_node_method:
+                        # SMART LOADING: Check parameter names to determine order
                         try:
-                            self.graph.add_node(node_id, name, (x, y))
-                        except TypeError:
-                            # Fall back to 4 separate args
+                            sig = inspect.signature(add_node_method)
+                            params = list(sig.parameters.keys())
+
+                            # Check if student uses specific variable names "x" and "y"
+                            if 'x' in params and 'y' in params:
+                                # Use Keyword Arguments (Safe for any order)
+                                # We construct kwargs dynamically based on what the student named their 'id' and 'name'
+                                kwargs = {'x': x, 'y': y}
+
+                                # Find what they named the ID parameter (likely the first one after self)
+                                # params[0] is usually 'self' if bound, or first arg if unbound.
+                                # inspect.signature on bound method skips self.
+                                first_arg = params[0]
+                                kwargs[first_arg] = node_id
+
+                                # Find what they named the Name parameter
+                                if 'name' in params:
+                                    kwargs['name'] = name
+                                elif 'label' in params:
+                                    kwargs['label'] = name
+
+                                add_node_method(**kwargs)
+                            else:
+                                # Fallback 1: Standard Order (id, name, tuple)
+                                try:
+                                    add_node_method(node_id, name, (x, y))
+                                except TypeError:
+                                    # Fallback 2: Standard Order (id, name, x, y)
+                                    add_node_method(node_id, name, x, y)
+
+                        except Exception:
+                            # Final "Brute Force" Fallback for Caleb Franklin case (id, x, y, name)
+                            # If the above failed, try this specific swapped order
                             try:
-                                self.graph.add_node(node_id, name, x, y)
+                                add_node_method(node_id, x, y, name)
                             except:
                                 pass
 
@@ -94,33 +138,42 @@ class GraphTester:
                     to_node = int(parts[1])
                     weight = float(parts[2])
 
-                    if hasattr(self.graph, 'addEdge'):
-                        self.graph.addEdge(from_node, to_node, weight)
-                    elif hasattr(self.graph, 'add_edge'):
-                        self.graph.add_edge(from_node, to_node, weight)
+                    if add_edge_method:
+                        add_edge_method(from_node, to_node, weight)
+
+    def _count_nodes(self):
+        """Helper to robustly count nodes in the graph"""
+        if hasattr(self.graph, 'nodes'):
+            return len(self.graph.nodes)
+        elif hasattr(self.graph, 'get_nodes'):
+            return len(self.graph.get_nodes())
+        elif hasattr(self.graph, 'num_nodes'):
+            return self.graph.num_nodes()
+        elif hasattr(self.graph, 'graph') and isinstance(self.graph.graph, dict):
+            return len(self.graph.graph)
+        elif isinstance(self.graph, dict):
+            return len(self.graph)
+        return 0
+
+    def _count_edges(self):
+        """Helper to robustly count edges"""
+        if hasattr(self.graph, 'edges'):
+            return len(self.graph.edges)
+        elif hasattr(self.graph, 'get_edges'):
+            return len(self.graph.get_edges())
+        elif hasattr(self.graph, 'num_edges'):
+            return self.graph.num_edges()
+        elif hasattr(self.graph, 'adj'):
+            return sum(len(v) for v in self.graph.adj.values())
+        return 0
 
     def test_csv_parsing(self):
         """Test 1: CSV files are parsed correctly"""
         try:
             self.build_graph()
 
-            # Count nodes
-            node_count = 0
-            if hasattr(self.graph, 'nodes'):
-                node_count = len(self.graph.nodes)
-            elif hasattr(self.graph, 'get_nodes'):
-                node_count = len(self.graph.get_nodes())
-            elif hasattr(self.graph, 'num_nodes'):
-                node_count = self.graph.num_nodes()
-
-            # Count edges
-            edge_count = 0
-            if hasattr(self.graph, 'edges'):
-                edge_count = len(self.graph.edges)
-            elif hasattr(self.graph, 'get_edges'):
-                edge_count = len(self.graph.get_edges())
-            elif hasattr(self.graph, 'num_edges'):
-                edge_count = self.graph.num_edges()
+            node_count = self._count_nodes()
+            edge_count = self._count_edges()
 
             passed = node_count >= 15  # At least 15 nodes required
 
@@ -145,10 +198,32 @@ class GraphTester:
         try:
             # Add a test node
             test_id = 999
-            if hasattr(self.graph, 'add_node'):
-                self.graph.add_node(test_id, "Test Node", (0, 0))
-            elif hasattr(self.graph, 'addNode'):
-                self.graph.addNode(test_id, "Test Node", (0, 0))
+
+            # Helper to find method
+            add_node = getattr(self.graph, 'addNode', getattr(self.graph, 'add_node', None))
+
+            if add_node:
+                # Robust add using inspect (Same logic as manual load)
+                try:
+                    sig = inspect.signature(add_node)
+                    params = list(sig.parameters.keys())
+                    if 'x' in params and 'y' in params:
+                        first_arg = params[0]
+                        kwargs = {first_arg: test_id, 'x': 0.0, 'y': 0.0}
+                        if 'name' in params: kwargs['name'] = "Test Node"
+                        add_node(**kwargs)
+                    else:
+                        # Fallback
+                        try:
+                            add_node(test_id, "Test Node", (0, 0))
+                        except TypeError:
+                            add_node(test_id, "Test Node", 0, 0)
+                except:
+                    # Final fallback
+                    try:
+                        add_node(test_id, "Test Node", 0, 0)
+                    except:
+                        pass  # Fail silently, check results below
 
             # Check if added
             added = False
@@ -156,6 +231,8 @@ class GraphTester:
                 added = self.graph.has_node(test_id)
             elif hasattr(self.graph, 'nodes') and test_id in self.graph.nodes:
                 added = True
+            elif hasattr(self.graph, 'graph') and isinstance(self.graph.graph, dict):
+                added = test_id in self.graph.graph
 
             # Remove the node
             if hasattr(self.graph, 'remove_node'):
@@ -169,6 +246,8 @@ class GraphTester:
                 removed = not self.graph.has_node(test_id)
             elif hasattr(self.graph, 'nodes') and test_id in self.graph.nodes:
                 removed = False
+            elif hasattr(self.graph, 'graph') and isinstance(self.graph.graph, dict):
+                removed = test_id not in self.graph.graph
 
             passed = added and removed
 
@@ -191,27 +270,66 @@ class GraphTester:
     def test_add_remove_edges(self):
         """Test 3: Add and remove edges"""
         try:
-            # Add test edge (between existing nodes)
+            # Use dummy nodes to avoid breaking existing data
+            u, v = 9998, 9999
+
+            # Reuse the robust add logic from above
+            add_node = getattr(self.graph, 'addNode', getattr(self.graph, 'add_node', None))
+            if add_node:
+                try:
+                    sig = inspect.signature(add_node)
+                    params = list(sig.parameters.keys())
+                    if 'x' in params and 'y' in params:
+                        first_arg = params[0]
+                        kw_u = {first_arg: u, 'x': 0.0, 'y': 0.0, 'name': 'U'}
+                        kw_v = {first_arg: v, 'x': 1.0, 'y': 1.0, 'name': 'V'}
+                        if 'name' not in params:
+                            del kw_u['name']
+                            del kw_v['name']
+                        add_node(**kw_u)
+                        add_node(**kw_v)
+                    else:
+                        try:
+                            add_node(u, "U", (0, 0))
+                            add_node(v, "V", (1, 1))
+                        except TypeError:
+                            add_node(u, "U", 0, 0)
+                            add_node(v, "V", 1, 1)
+                except:
+                    pass
+
+            # Add test edge
             if hasattr(self.graph, 'add_edge'):
-                self.graph.add_edge(1, 2, 999.0)
+                self.graph.add_edge(u, v, 5.0)
             elif hasattr(self.graph, 'addEdge'):
-                self.graph.addEdge(1, 2, 999.0)
+                self.graph.addEdge(u, v, 5.0)
 
             # Check if added
             added = False
             if hasattr(self.graph, 'has_edge'):
-                added = self.graph.has_edge(1, 2)
+                added = self.graph.has_edge(u, v)
             elif hasattr(self.graph, 'get_edge_weight'):
-                weight = self.graph.get_edge_weight(1, 2)
-                added = weight == 999.0
+                weight = self.graph.get_edge_weight(u, v)
+                added = weight == 5.0
+            elif hasattr(self.graph, 'getEdgeWeight'):
+                weight = self.graph.getEdgeWeight(u, v)
+                added = weight == 5.0
 
             # Remove edge
             if hasattr(self.graph, 'remove_edge'):
-                self.graph.remove_edge(1, 2)
+                self.graph.remove_edge(u, v)
             elif hasattr(self.graph, 'removeEdge'):
-                self.graph.removeEdge(1, 2)
+                self.graph.removeEdge(u, v)
 
-            passed = True  # If no errors, consider it passed
+            # Clean up dummy nodes
+            if hasattr(self.graph, 'removeNode'):
+                self.graph.removeNode(u)
+                self.graph.removeNode(v)
+            elif hasattr(self.graph, 'remove_node'):
+                self.graph.remove_node(u)
+                self.graph.remove_node(v)
+
+            passed = True
 
             return {
                 "name": "Add/Remove Edges",
@@ -321,9 +439,9 @@ class DijkstraTester:
         (3, 11, "Library → Aquatic Center (Medium Path)")
     ]
 
-    # Expected optimal costs (you'll need to update these based on your dataset)
+    # Expected optimal costs
     EXPECTED_COSTS = {
-        (1, 14): 113.0,  # Update these with actual optimal costs
+        (1, 14): 113.0,
         (8, 9): 1.0,
         (4, 13): 75.0,
         (6, 10): 77.0,
@@ -347,11 +465,28 @@ class DijkstraTester:
             else:
                 return None, None, "No dijkstra function found"
 
-            # Parse result - common formats:
-            # (path, cost), (cost, path), {"path": ..., "cost": ...}
+            # Parse result
+            nodes_explored = None
+            path = None
+            cost = None
+
             if isinstance(result, tuple):
-                if len(result) >= 2:
-                    # Try to determine which is path and which is cost
+                if len(result) >= 3:
+                    # Format: (path, cost, nodes_explored, [time])
+                    val1, val2, val3 = result[0], result[1], result[2]
+
+                    if isinstance(val1, list) or val1 is None:
+                        path = val1
+                        cost = val2
+                        nodes_explored = val3
+                    elif isinstance(val2, list) or val2 is None:
+                        cost = val1
+                        path = val2
+                        nodes_explored = val3
+                    else:
+                        path, cost, nodes_explored = val1, val2, val3
+
+                elif len(result) >= 2:
                     if isinstance(result[0], list):
                         path, cost = result[0], result[1]
                     elif isinstance(result[1], list):
@@ -363,14 +498,10 @@ class DijkstraTester:
             elif isinstance(result, dict):
                 path = result.get('path', result.get('shortest_path', []))
                 cost = result.get('cost', result.get('distance', result.get('weight', None)))
+                nodes_explored = result.get('nodes_explored', result.get('visited', None))
             else:
                 path = result
                 cost = None
-
-            # Try to extract nodes_explored
-            nodes_explored = None
-            if isinstance(result, dict):
-                nodes_explored = result.get('nodes_explored', result.get('visited', None))
 
             return path, cost, nodes_explored
 
@@ -383,7 +514,6 @@ class DijkstraTester:
 
         expected_cost = self.EXPECTED_COSTS.get((start, end), None)
 
-        # For testing purposes, if we don't have expected cost, just check if it returns something
         if expected_cost is None:
             passed = path is not None and cost is not None
             status = "PASS (no expected cost to verify)" if passed else "FAIL"
@@ -445,9 +575,25 @@ class AStarTester:
             else:
                 return None, None, "No A* function found"
 
-            # Parse result (same as Dijkstra)
+            # Parse result
+            nodes_explored = None
+            path = None
+            cost = None
+
             if isinstance(result, tuple):
-                if len(result) >= 2:
+                if len(result) >= 3:
+                    val1, val2, val3 = result[0], result[1], result[2]
+                    if isinstance(val1, list) or val1 is None:
+                        path = val1
+                        cost = val2
+                        nodes_explored = val3
+                    elif isinstance(val2, list) or val2 is None:
+                        cost = val1
+                        path = val2
+                        nodes_explored = val3
+                    else:
+                        path, cost, nodes_explored = val1, val2, val3
+                elif len(result) >= 2:
                     if isinstance(result[0], list):
                         path, cost = result[0], result[1]
                     elif isinstance(result[1], list):
@@ -459,14 +605,10 @@ class AStarTester:
             elif isinstance(result, dict):
                 path = result.get('path', result.get('shortest_path', []))
                 cost = result.get('cost', result.get('distance', result.get('weight', None)))
+                nodes_explored = result.get('nodes_explored', result.get('visited', None))
             else:
                 path = result
                 cost = None
-
-            # Try to extract nodes_explored
-            nodes_explored = None
-            if isinstance(result, dict):
-                nodes_explored = result.get('nodes_explored', result.get('visited', None))
 
             return path, cost, nodes_explored
 
@@ -479,7 +621,6 @@ class AStarTester:
 
         expected_cost = self.EXPECTED_COSTS.get((start, end), None)
 
-        # A* should find optimal path (same cost as Dijkstra)
         if expected_cost is None:
             passed = path is not None and cost is not None
             status = "PASS (no expected cost to verify)" if passed else "FAIL"
@@ -528,7 +669,6 @@ class PerformanceTester:
     def run_all_tests(self):
         """Run performance comparison tests"""
 
-        # Run both algorithms on test queries
         dijkstra_tester = DijkstraTester(self.dijkstra_module, self.graph)
         astar_tester = AStarTester(self.astar_module, self.graph)
 
@@ -552,11 +692,9 @@ class PerformanceTester:
                 "astar_improvement": ((d_nodes - a_nodes) / d_nodes * 100) if (d_nodes and a_nodes) else None
             })
 
-        # Check if tracking works
         tracking_works = any(c["dijkstra_nodes"] is not None or c["astar_nodes"] is not None
                              for c in comparisons)
 
-        # Check if A* generally explores fewer nodes
         astar_better_count = sum(1 for c in comparisons
                                  if c["dijkstra_nodes"] and c["astar_nodes"]
                                  and c["astar_nodes"] <= c["dijkstra_nodes"])

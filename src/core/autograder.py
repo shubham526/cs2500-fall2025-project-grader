@@ -123,7 +123,7 @@ class Autograder:
             "code_execution": {},
             "flags": [],
             "automated_score": 0,
-            "max_automated_score": 55,
+            "max_automated_score": 52,  # Adjusted to 52 (feature is now manual)
             "errors": []
         }
 
@@ -162,10 +162,11 @@ class Autograder:
             print(f"     Cannot grade without these files.")
             return results
 
-        # Note optional missing files but continue
+        # Note optional missing files but DO NOT add to errors (preserves execution points)
         if missing_optional:
-            results["errors"].append(f"Missing optional files: {', '.join(missing_optional)}")
-            print(f"  ⚠️  Missing files: {', '.join(missing_optional)}")
+            flag_msg = f"Missing optional files: {', '.join(missing_optional)}"
+            results["flags"].append({"type": "warning", "message": flag_msg})
+            print(f"  ⚠️  {flag_msg}")
             print(f"     (Continuing with code grading)")
         else:
             print("  ✓ All required files found")
@@ -200,6 +201,9 @@ class Autograder:
             results["errors"].append(f"Module loading error: {str(e)}")
             print(f"  ❌ {str(e)}")
             return results
+
+        # Initialize safe reference
+        graph_instance = None
 
         # Step 3: Test graph operations
         print("\n[3/6] Testing graph operations...")
@@ -237,6 +241,9 @@ class Autograder:
         # Step 5: Test A* algorithm
         print("\n[5/6] Testing A* algorithm...")
         try:
+            if graph_instance is None:
+                raise Exception("Graph could not be built, skipping A* tests")
+
             astar_tester = AStarTester(astar_module, graph_instance)
             results["astar_tests"] = astar_tester.run_all_tests()
 
@@ -247,11 +254,14 @@ class Autograder:
         except Exception as e:
             results["errors"].append(f"A* testing error: {str(e)}")
             print(f"  ❌ A* testing failed: {str(e)}")
-            traceback.print_exc()
+            # traceback.print_exc()
 
         # Step 6: Performance comparison
         print("\n[6/6] Running performance tests...")
         try:
+            if graph_instance is None:
+                raise Exception("Graph could not be built, skipping performance tests")
+
             perf_tester = PerformanceTester(dijkstra_module, astar_module, graph_instance)
             results["performance_tests"] = perf_tester.run_all_tests()
 
@@ -260,11 +270,11 @@ class Autograder:
         except Exception as e:
             results["errors"].append(f"Performance testing error: {str(e)}")
             print(f"  ❌ Performance testing failed: {str(e)}")
-            traceback.print_exc()
+            # traceback.print_exc()
 
         # Check for code quality flags
         print("\nChecking code quality flags...")
-        results["flags"] = self.check_code_flags(repo_dir)
+        results["flags"].extend(self.check_code_flags(repo_dir))
 
         # Calculate automated score
         results["automated_score"] = self.calculate_score(results)
@@ -347,11 +357,7 @@ class Autograder:
         if "performance_tests" in results and results["performance_tests"].get("tracking_works", False):
             score += 5
 
-        # Additional feature: 3 points (if detected)
-        if "additional_feature" in results and results["additional_feature"].get("detected", False):
-            score += 3
-
-        # Code execution: 5 points
+        # Code execution: 5 points (clean run with no critical errors)
         if len(results.get("errors", [])) == 0:
             score += 5
 
@@ -451,7 +457,7 @@ class Autograder:
                         "repo_url": repo_url,
                         "errors": [message],
                         "automated_score": 0,
-                        "max_automated_score": 55
+                        "max_automated_score": 52
                     }
                 else:
                     print(f"  ✓ Repository cloned")
@@ -502,7 +508,7 @@ class Autograder:
             for result in sorted(self.results, key=lambda x: x.get("automated_score", 0), reverse=True):
                 student = result["student_name"]
                 score = result.get("automated_score", 0)
-                max_score = result.get("max_automated_score", 55)
+                max_score = result.get("max_automated_score", 52)
                 percentage = (score / max_score * 100) if max_score > 0 else 0
 
                 line = f"{student:30s} {score:5.1f}/{max_score} ({percentage:5.1f}%)\n"
@@ -516,9 +522,9 @@ class Autograder:
             avg_score = sum(scores) / len(scores) if scores else 0
 
             stats = f"\nTotal Submissions: {len(self.results)}\n"
-            stats += f"Average Score: {avg_score:.1f}/55\n"
-            stats += f"Highest Score: {max(scores) if scores else 0:.1f}/55\n"
-            stats += f"Lowest Score: {min(scores) if scores else 0:.1f}/55\n"
+            stats += f"Average Score: {avg_score:.1f}/52\n"
+            stats += f"Highest Score: {max(scores) if scores else 0:.1f}/52\n"
+            stats += f"Lowest Score: {min(scores) if scores else 0:.1f}/52\n"
 
             f.write(stats)
             print(stats)

@@ -94,7 +94,7 @@ def generate_pdf_report(results, output_path):
 
     # Automated Score Summary (Highlighted Box)
     score = results.get("automated_score", 0)
-    max_score = results.get("max_automated_score", 55)
+    max_score = results.get("max_automated_score", 52)
     percentage = (score / max_score * 100) if max_score > 0 else 0
 
     # Determine status symbol
@@ -433,7 +433,7 @@ def generate_pdf_report(results, output_path):
 
     # Section 7: Manual Grading Requirements
     elements.append(PageBreak())
-    elements.append(Paragraph("MANUAL GRADING REQUIRED (95 points)", heading2_style))
+    elements.append(Paragraph("MANUAL GRADING REQUIRED (98 points)", heading2_style))
     elements.append(Paragraph(
         "The following components require manual review by the instructor:",
         styles['Normal']
@@ -464,8 +464,15 @@ def generate_pdf_report(results, output_path):
             "Insights and conclusions",
             "Analysis quality"
         ]),
-        ("□", "Additional Feature Quality (7 points)", []),
-        ("□", "Testing Quality (5 points)", [])
+        ("□", "Additional Feature (10 points)", [
+            "Properly implemented",
+            "Demonstrated in main.py",
+            "Documented in report"
+        ]),
+        ("□", "Testing Quality (5 points)", [
+            "Test suite completeness",
+            "Edge case coverage"
+        ])
     ]
 
     for checkbox, title, details in manual_items:
@@ -481,7 +488,7 @@ def generate_pdf_report(results, output_path):
     ], [
         f"Automated Score: {score:.1f}/{max_score} points"
     ], [
-        "Manual Review Needed: 0/95 points (not yet graded)"
+        "Manual Review Needed: 0/98 points (not yet graded)"
     ], [
         f"Current Total: {score:.1f}/150 points"
     ]]
