@@ -17,13 +17,10 @@ class GraphTester:
         self.graph_module = graph_module
         self.repo_dir = repo_dir
         self.graph = None
-
-        # Expected test data (based on provided CSV files)
         self.nodes_file = os.path.join(repo_dir, "nodes.csv")
         self.edges_file = os.path.join(repo_dir, "edges.csv")
 
     def build_graph(self):
-        """Build a graph from the CSV files"""
         try:
             # 1. Look for Class-based implementation
             if hasattr(self.graph_module, 'Graph'):
@@ -37,7 +34,6 @@ class GraphTester:
                 if hasattr(self.graph_module, 'nodes') and hasattr(self.graph_module, 'edges'):
                     self.graph = self.graph_module
                 else:
-                    # Try to find ANY class
                     found = False
                     for attr_name in dir(self.graph_module):
                         attr = getattr(self.graph_module, attr_name)
@@ -66,14 +62,9 @@ class GraphTester:
             raise Exception(f"Failed to build graph: {str(e)}")
 
     def _manual_load_csv(self):
-        """Manually load CSV files if no built-in method"""
-
-        if self._count_nodes() > 0:
-            return
-
+        if self._count_nodes() > 0: return
         add_node_method = getattr(self.graph, 'addNode', getattr(self.graph, 'add_node', None))
         add_edge_method = getattr(self.graph, 'addEdge', getattr(self.graph, 'add_edge', None))
-
         with open(self.nodes_file, 'r') as f:
             lines = f.readlines()
             for line in lines[1:]:
@@ -83,12 +74,10 @@ class GraphTester:
                     name = parts[1]
                     x = float(parts[2])
                     y = float(parts[3])
-
                     if add_node_method:
                         try:
                             sig = inspect.signature(add_node_method)
                             params = list(sig.parameters.keys())
-
                             if 'x' in params and 'y' in params:
                                 kwargs = {'x': x, 'y': y}
                                 first_arg = params[0]
@@ -108,7 +97,6 @@ class GraphTester:
                                 add_node_method(node_id, x, y, name)
                             except:
                                 pass
-
         with open(self.edges_file, 'r') as f:
             lines = f.readlines()
             for line in lines[1:]:
@@ -130,8 +118,8 @@ class GraphTester:
             if callable(val): return len(val())
         if hasattr(self.graph, 'get_nodes'): return len(self.graph.get_nodes())
         if hasattr(self.graph, 'num_nodes'): return self.graph.num_nodes()
-        if hasattr(self.graph, 'nodeNames'): return len(self.graph.nodeNames)
         if hasattr(self.graph, 'graph') and isinstance(self.graph.graph, dict): return len(self.graph.graph)
+        if hasattr(self.graph, 'nodeNames'): return len(self.graph.nodeNames)
         if isinstance(self.graph, dict): return len(self.graph)
         return 0
 
@@ -140,8 +128,7 @@ class GraphTester:
             val = self.graph.edges
             if isinstance(val, dict):
                 count = 0
-                for u, neighbors in val.items():
-                    count += len(neighbors)
+                for u, neighbors in val.items(): count += len(neighbors)
                 return count
             if isinstance(val, list): return len(val)
         if hasattr(self.graph, 'get_edges'): return len(self.graph.get_edges())
@@ -153,21 +140,11 @@ class GraphTester:
             self.build_graph()
             node_count = self._count_nodes()
             passed = node_count >= 15
-            return {
-                "name": "CSV Parsing",
-                "passed": passed,
-                "expected": "Load 15+ nodes",
-                "actual": f"Loaded {node_count} nodes",
-                "points": 2.4 if passed else 0
-            }
+            return {"name": "CSV Parsing", "passed": passed, "expected": "Load 15+ nodes",
+                    "actual": f"Loaded {node_count} nodes", "points": 2.4 if passed else 0}
         except Exception as e:
-            return {
-                "name": "CSV Parsing",
-                "passed": False,
-                "expected": "Load data",
-                "actual": f"Error: {str(e)}",
-                "points": 0
-            }
+            return {"name": "CSV Parsing", "passed": False, "expected": "Load data", "actual": f"Error: {str(e)}",
+                    "points": 0}
 
     def test_add_remove_nodes(self):
         try:
@@ -189,7 +166,6 @@ class GraphTester:
                             add_node(test_id, "Test", 0, 0)
                 except:
                     pass
-
             return {"name": "Add/Remove Nodes", "passed": True, "expected": "Add/Remove", "actual": "Pass",
                     "points": 2.4}
         except:
@@ -231,13 +207,8 @@ class GraphTester:
                     "points": 0}
 
     def run_all_tests(self):
-        tests = [
-            self.test_csv_parsing(),
-            self.test_add_remove_nodes(),
-            self.test_add_remove_edges(),
-            self.test_get_neighbors(),
-            self.test_get_edge_weight()
-        ]
+        tests = [self.test_csv_parsing(), self.test_add_remove_nodes(), self.test_add_remove_edges(),
+                 self.test_get_neighbors(), self.test_get_edge_weight()]
         return {"tests": tests, "total_points": sum(t["points"] for t in tests), "max_points": 12}
 
 
@@ -256,15 +227,11 @@ class DijkstraTester:
         self.graph = graph
 
     def reconstruct_path_from_parents(self, came_from, start, end):
-        """Helper to reconstruct path if student returns parent pointers"""
         current = end
         path = []
-        # Handle case where start/end might be strings
         if end not in came_from and str(end) in came_from: end = str(end)
         if start not in came_from and str(start) in came_from: start = str(start)
-
         if end not in came_from: return None
-
         while current != start:
             path.append(current)
             current = came_from.get(current)
@@ -275,36 +242,52 @@ class DijkstraTester:
 
     def run_dijkstra(self, start, end):
         try:
-            func = getattr(self.dijkstra_module, 'dijkstra',
-                           getattr(self.dijkstra_module, 'shortest_path',
-                                   getattr(self.dijkstra_module, 'find_shortest_path',
-                                           getattr(self.dijkstra_module, 'Dijkstra_Search',
-                                                   getattr(self.dijkstra_module, 'find_path', None)))))
+            # 1. Attempt to find class and instantiate (Sophia Nguyen fix)
+            func = None
+            if hasattr(self.dijkstra_module, 'Dijkstra'):
+                d_class = self.dijkstra_module.Dijkstra(self.graph)
+                func = getattr(d_class, 'find_shortest_path', getattr(d_class, 'dijkstra', None))
+
+            # 2. If no class, look for module-level function
+            if not func:
+                func = getattr(self.dijkstra_module, 'dijkstra',
+                               getattr(self.dijkstra_module, 'shortest_path',
+                                       getattr(self.dijkstra_module, 'find_shortest_path',
+                                               getattr(self.dijkstra_module, 'Dijkstra_Search',
+                                                       getattr(self.dijkstra_module, 'find_path', None)))))
 
             if not func: return None, None, "No function found"
 
+            # Check args string conversion
             start_val, end_val = start, end
             if hasattr(self.graph, 'nodes'):
                 keys = list(self.graph.nodes.keys())
                 if keys and isinstance(keys[0], str): start_val, end_val = str(start), str(end)
 
-            sig = inspect.signature(func)
-            params = list(sig.parameters.keys())
+            # Smart Dispatch
+            try:
+                sig = inspect.signature(func)
+                params = list(sig.parameters.keys())
 
-            if 'edges' in params and 'nodes' in params:
-                g_nodes = getattr(self.graph, 'nodes', {})
-                g_edges = getattr(self.graph, 'edges', {})
-                kwargs = {}
-                if 'edges' in params: kwargs['edges'] = g_edges
-                if 'nodes' in params: kwargs['nodes'] = g_nodes
-                remaining = [p for p in params if p not in ['edges', 'nodes']]
-                if len(remaining) >= 2:
-                    kwargs[remaining[0]] = start_val
-                    kwargs[remaining[1]] = end_val
-                result = func(**kwargs)
-            else:
+                if 'edges' in params and 'nodes' in params:
+                    g_nodes = getattr(self.graph, 'nodes', {})
+                    g_edges = getattr(self.graph, 'edges', {})
+                    kwargs = {'edges': g_edges, 'nodes': g_nodes}
+                    remaining = [p for p in params if p not in ['edges', 'nodes']]
+                    if len(remaining) >= 2:
+                        kwargs[remaining[0]] = start_val
+                        kwargs[remaining[1]] = end_val
+                    result = func(**kwargs)
+                else:
+                    # If func is bound method (Sophia), it doesn't need graph arg
+                    if inspect.ismethod(func):
+                        result = func(start_val, end_val)
+                    else:
+                        result = func(self.graph, start_val, end_val)
+            except:
                 result = func(self.graph, start_val, end_val)
 
+            # Parse result
             nodes_explored, path, cost = None, None, None
 
             if hasattr(result, 'cost') and hasattr(result, 'path'):
@@ -313,18 +296,14 @@ class DijkstraTester:
                 nodes_explored = getattr(result, 'nodes_explored', None)
             elif isinstance(result, tuple):
                 if len(result) == 4:
-                    path = result[0]
-                    cost = result[1]
-                    nodes_explored = result[2]
+                    path, cost, nodes_explored = result[0], result[1], result[2]
                 elif len(result) >= 3:
                     val1, val2, val3 = result[0], result[1], result[2]
-                    # James Lewis Case: (came_from_dict, cost_dict, nodes_explored)
                     if isinstance(val1, dict) and isinstance(val2, dict):
                         path = self.reconstruct_path_from_parents(val1, start_val, end_val)
                         cost = val2.get(end_val)
                         nodes_explored = val3
                     else:
-                        # Standard 3-tuple
                         for val in result:
                             if isinstance(val, list):
                                 path = val
@@ -355,23 +334,17 @@ class DijkstraTester:
     def test_query(self, start, end, description):
         path, cost, nodes_explored = self.run_dijkstra(start, end)
         expected = self.EXPECTED_COSTS.get((start, end))
-
         passed = False
         if expected is not None and cost is not None:
-            if abs(cost - expected) < 0.1: passed = True
+            try:
+                if abs(cost - expected) < 0.1: passed = True
+            except:
+                pass
         elif path is not None:
             passed = True
 
-        return {
-            "name": description,
-            "passed": passed,
-            "start": start,
-            "end": end,
-            "expected_cost": expected,
-            "actual_cost": cost,
-            "points": 3 if passed else 0,
-            "nodes_explored": nodes_explored
-        }
+        return {"name": description, "passed": passed, "start": start, "end": end, "expected_cost": expected,
+                "actual_cost": cost, "points": 3 if passed else 0, "nodes_explored": nodes_explored}
 
     def run_all_tests(self):
         tests = [self.test_query(s, e, d) for s, e, d in self.REQUIRED_QUERIES]
@@ -391,7 +364,6 @@ class AStarTester:
         path = []
         if end not in came_from and str(end) in came_from: end = str(end)
         if start not in came_from and str(start) in came_from: start = str(start)
-
         if end not in came_from: return None
         while current != start:
             path.append(current)
@@ -403,11 +375,18 @@ class AStarTester:
 
     def run_astar(self, start, end):
         try:
-            func = getattr(self.astar_module, 'astar',
-                           getattr(self.astar_module, 'a_star',
-                                   getattr(self.astar_module, 'find_shortest_path',
-                                           getattr(self.astar_module, 'A_Star_Search',
-                                                   getattr(self.astar_module, 'find_path', None)))))
+            # 1. Attempt to find class and instantiate (Sophia Nguyen fix)
+            func = None
+            if hasattr(self.astar_module, 'AStar'):
+                a_class = self.astar_module.AStar(self.graph)
+                func = getattr(a_class, 'find_shortest_path', getattr(a_class, 'astar', None))
+
+            if not func:
+                func = getattr(self.astar_module, 'astar',
+                               getattr(self.astar_module, 'a_star',
+                                       getattr(self.astar_module, 'find_shortest_path',
+                                               getattr(self.astar_module, 'A_Star_Search',
+                                                       getattr(self.astar_module, 'find_path', None)))))
 
             if not func: return None, None, "No function found"
 
@@ -416,21 +395,25 @@ class AStarTester:
                 keys = list(self.graph.nodes.keys())
                 if keys and isinstance(keys[0], str): start_val, end_val = str(start), str(end)
 
-            sig = inspect.signature(func)
-            params = list(sig.parameters.keys())
+            try:
+                sig = inspect.signature(func)
+                params = list(sig.parameters.keys())
 
-            if 'edges' in params and 'nodes' in params:
-                g_nodes = getattr(self.graph, 'nodes', {})
-                g_edges = getattr(self.graph, 'edges', {})
-                kwargs = {}
-                if 'edges' in params: kwargs['edges'] = g_edges
-                if 'nodes' in params: kwargs['nodes'] = g_nodes
-                remaining = [p for p in params if p not in ['edges', 'nodes']]
-                if len(remaining) >= 2:
-                    kwargs[remaining[0]] = start_val
-                    kwargs[remaining[1]] = end_val
-                result = func(**kwargs)
-            else:
+                if 'edges' in params and 'nodes' in params:
+                    g_nodes = getattr(self.graph, 'nodes', {})
+                    g_edges = getattr(self.graph, 'edges', {})
+                    kwargs = {'edges': g_edges, 'nodes': g_nodes}
+                    remaining = [p for p in params if p not in ['edges', 'nodes']]
+                    if len(remaining) >= 2:
+                        kwargs[remaining[0]] = start_val
+                        kwargs[remaining[1]] = end_val
+                    result = func(**kwargs)
+                else:
+                    if inspect.ismethod(func):
+                        result = func(start_val, end_val)
+                    else:
+                        result = func(self.graph, start_val, end_val)
+            except:
                 result = func(self.graph, start_val, end_val)
 
             nodes_explored, path, cost = None, None, None
@@ -441,9 +424,7 @@ class AStarTester:
                 nodes_explored = getattr(result, 'nodes_explored', None)
             elif isinstance(result, tuple):
                 if len(result) == 4:
-                    path = result[0]
-                    cost = result[1]
-                    nodes_explored = result[2]
+                    path, cost, nodes_explored = result[0], result[1], result[2]
                 elif len(result) >= 3:
                     val1, val2, val3 = result[0], result[1], result[2]
                     if isinstance(val1, dict) and isinstance(val2, dict):
@@ -469,7 +450,7 @@ class AStarTester:
                         cost, path = val1, val2
             elif isinstance(result, dict):
                 path = result.get('path', result.get('shortest_path'))
-                cost = result.get('cost', result.get('total_cost'))
+                cost = result.get('cost', result.get('total_cost', result.get('total_distance')))
                 nodes_explored = result.get('nodes_explored', result.get('visited_nodes'))
                 if isinstance(nodes_explored, list): nodes_explored = len(nodes_explored)
 
@@ -482,17 +463,12 @@ class AStarTester:
         expected = self.EXPECTED_COSTS.get((start, end))
         passed = False
         if expected is not None and cost is not None:
-            if abs(cost - expected) < 0.1: passed = True
-        return {
-            "name": description,
-            "passed": passed,
-            "start": start,
-            "end": end,
-            "expected_cost": expected,
-            "actual_cost": cost,
-            "points": 3 if passed else 0,
-            "nodes_explored": nodes_explored
-        }
+            try:
+                if abs(cost - expected) < 0.1: passed = True
+            except:
+                pass
+        return {"name": description, "passed": passed, "start": start, "end": end, "expected_cost": expected,
+                "actual_cost": cost, "points": 3 if passed else 0, "nodes_explored": nodes_explored}
 
     def run_all_tests(self):
         tests = [self.test_query(s, e, d) for s, e, d in self.REQUIRED_QUERIES]
@@ -511,9 +487,13 @@ class PerformanceTester:
             _, a_cost, a_nodes = self.a_tester.run_astar(s, e)
 
             imp = None
-            if d_nodes is not None and a_nodes is not None and d_nodes > 0:
+            if d_nodes is not None and a_nodes is not None:
+                # Type check to avoid str vs int errors (Sophia fix)
                 try:
-                    imp = ((d_nodes - a_nodes) / d_nodes * 100)
+                    d_val = int(d_nodes)
+                    a_val = int(a_nodes)
+                    if d_val > 0:
+                        imp = ((d_val - a_val) / d_val * 100)
                 except:
                     pass
 
