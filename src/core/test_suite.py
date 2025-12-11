@@ -96,16 +96,10 @@ class GraphTester:
                             # Check if student uses specific variable names "x" and "y"
                             if 'x' in params and 'y' in params:
                                 # Use Keyword Arguments (Safe for any order)
-                                # We construct kwargs dynamically based on what the student named their 'id' and 'name'
                                 kwargs = {'x': x, 'y': y}
-
-                                # Find what they named the ID parameter (likely the first one after self)
-                                # params[0] is usually 'self' if bound, or first arg if unbound.
-                                # inspect.signature on bound method skips self.
                                 first_arg = params[0]
                                 kwargs[first_arg] = node_id
 
-                                # Find what they named the Name parameter
                                 if 'name' in params:
                                     kwargs['name'] = name
                                 elif 'label' in params:
@@ -121,8 +115,7 @@ class GraphTester:
                                     add_node_method(node_id, name, x, y)
 
                         except Exception:
-                            # Final "Brute Force" Fallback for Caleb Franklin case (id, x, y, name)
-                            # If the above failed, try this specific swapped order
+                            # Final "Brute Force" Fallback for Caleb Franklin case
                             try:
                                 add_node_method(node_id, x, y, name)
                             except:
@@ -144,8 +137,11 @@ class GraphTester:
     def _count_nodes(self):
         """Helper to robustly count nodes in the graph"""
         if hasattr(self.graph, 'nodes'):
-            return len(self.graph.nodes)
-        elif hasattr(self.graph, 'get_nodes'):
+            val = self.graph.nodes
+            if isinstance(val, dict) or isinstance(val, list): return len(val)
+            if callable(val): return len(val())
+
+        if hasattr(self.graph, 'get_nodes'):
             return len(self.graph.get_nodes())
         elif hasattr(self.graph, 'num_nodes'):
             return self.graph.num_nodes()
@@ -470,7 +466,14 @@ class DijkstraTester:
             path = None
             cost = None
 
-            if isinstance(result, tuple):
+            # 1. Check for Object Attributes (John Garside Case)
+            if hasattr(result, 'cost') and hasattr(result, 'path'):
+                path = getattr(result, 'path')
+                cost = getattr(result, 'cost')
+                nodes_explored = getattr(result, 'nodes_explored', None)
+
+            # 2. Check for Tuple
+            elif isinstance(result, tuple):
                 if len(result) >= 3:
                     # Format: (path, cost, nodes_explored, [time])
                     val1, val2, val3 = result[0], result[1], result[2]
@@ -495,10 +498,13 @@ class DijkstraTester:
                         path, cost = result, None
                 else:
                     path, cost = result[0], None
+
+            # 3. Check for Dictionary
             elif isinstance(result, dict):
                 path = result.get('path', result.get('shortest_path', []))
                 cost = result.get('cost', result.get('distance', result.get('weight', None)))
                 nodes_explored = result.get('nodes_explored', result.get('visited', None))
+
             else:
                 path = result
                 cost = None
@@ -580,7 +586,14 @@ class AStarTester:
             path = None
             cost = None
 
-            if isinstance(result, tuple):
+            # 1. Check for Object Attributes (John Garside Case)
+            if hasattr(result, 'cost') and hasattr(result, 'path'):
+                path = getattr(result, 'path')
+                cost = getattr(result, 'cost')
+                nodes_explored = getattr(result, 'nodes_explored', None)
+
+            # 2. Check for Tuple
+            elif isinstance(result, tuple):
                 if len(result) >= 3:
                     val1, val2, val3 = result[0], result[1], result[2]
                     if isinstance(val1, list) or val1 is None:
@@ -602,10 +615,13 @@ class AStarTester:
                         path, cost = result, None
                 else:
                     path, cost = result[0], None
+
+            # 3. Check for Dictionary
             elif isinstance(result, dict):
                 path = result.get('path', result.get('shortest_path', []))
                 cost = result.get('cost', result.get('distance', result.get('weight', None)))
                 nodes_explored = result.get('nodes_explored', result.get('visited', None))
+
             else:
                 path = result
                 cost = None
