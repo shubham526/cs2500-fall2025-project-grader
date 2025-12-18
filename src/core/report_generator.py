@@ -75,9 +75,7 @@ def generate_pdf_report(results, output_path):
     # Student Information
     student_info = [
         ["Student:", results.get("student_name", "Unknown")],
-        ["Repository:", results.get("repo_url", "N/A")],
         ["Graded:", results.get("timestamp", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))],
-        ["Report Generator:", "CS 2500 Autograder v1.0"]
     ]
 
     info_table = Table(student_info, colWidths=[1.5 * inch, 5 * inch])
@@ -432,54 +430,54 @@ def generate_pdf_report(results, output_path):
             elements.append(Spacer(1, 0.05 * inch))
 
     # Section 7: Manual Grading Requirements
-    elements.append(PageBreak())
-    elements.append(Paragraph("MANUAL GRADING REQUIRED (98 points)", heading2_style))
-    elements.append(Paragraph(
-        "The following components require manual review by the instructor:",
-        styles['Normal']
-    ))
-    elements.append(Spacer(1, 0.2 * inch))
-
-    manual_items = [
-        ("□", "Code Quality (10 points)", [
-            "Priority queue implementation",
-            "Code organization and readability",
-            "Meaningful comments"
-        ]),
-        ("□", "Dijkstra's Algorithm (15 points remaining)", [
-            "Step-by-step trace (3 pts)",
-            "Proof of correctness (8 pts)",
-            "Complexity analysis (3 pts)"
-        ]),
-        ("□", "A* Algorithm (15 points remaining)", [
-            "Heuristic admissibility proof (4 pts)",
-            "Comparison explanation (3 pts)",
-            "Complexity analysis (2 pts)",
-            "Algorithm explanation (6 pts)"
-        ]),
-        ("□", "Design Document (20 points)", [
-            "All sections complete and well-written"
-        ]),
-        ("□", "Algorithm Analysis (15 points)", [
-            "Insights and conclusions",
-            "Analysis quality"
-        ]),
-        ("□", "Additional Feature (10 points)", [
-            "Properly implemented",
-            "Demonstrated in main.py",
-            "Documented in report"
-        ]),
-        ("□", "Testing Quality (5 points)", [
-            "Test suite completeness",
-            "Edge case coverage"
-        ])
-    ]
-
-    for checkbox, title, details in manual_items:
-        elements.append(Paragraph(f"{checkbox} <b>{title}</b>", styles['Normal']))
-        for detail in details:
-            elements.append(Paragraph(f"   • {detail}", styles['Normal']))
-        elements.append(Spacer(1, 0.1 * inch))
+    # elements.append(PageBreak())
+    # elements.append(Paragraph("MANUAL GRADING REQUIRED (98 points)", heading2_style))
+    # elements.append(Paragraph(
+    #     "The following components require manual review by the instructor:",
+    #     styles['Normal']
+    # ))
+    # elements.append(Spacer(1, 0.2 * inch))
+    #
+    # manual_items = [
+    #     ("□", "Code Quality (10 points)", [
+    #         "Priority queue implementation",
+    #         "Code organization and readability",
+    #         "Meaningful comments"
+    #     ]),
+    #     ("□", "Dijkstra's Algorithm (15 points remaining)", [
+    #         "Step-by-step trace (3 pts)",
+    #         "Proof of correctness (8 pts)",
+    #         "Complexity analysis (3 pts)"
+    #     ]),
+    #     ("□", "A* Algorithm (15 points remaining)", [
+    #         "Heuristic admissibility proof (4 pts)",
+    #         "Comparison explanation (3 pts)",
+    #         "Complexity analysis (2 pts)",
+    #         "Algorithm explanation (6 pts)"
+    #     ]),
+    #     ("□", "Design Document (20 points)", [
+    #         "All sections complete and well-written"
+    #     ]),
+    #     ("□", "Algorithm Analysis (15 points)", [
+    #         "Insights and conclusions",
+    #         "Analysis quality"
+    #     ]),
+    #     ("□", "Additional Feature (10 points)", [
+    #         "Properly implemented",
+    #         "Demonstrated in main.py",
+    #         "Documented in report"
+    #     ]),
+    #     ("□", "Testing Quality (5 points)", [
+    #         "Test suite completeness",
+    #         "Edge case coverage"
+    #     ])
+    # ]
+    #
+    # for checkbox, title, details in manual_items:
+    #     elements.append(Paragraph(f"{checkbox} <b>{title}</b>", styles['Normal']))
+    #     for detail in details:
+    #         elements.append(Paragraph(f"   • {detail}", styles['Normal']))
+    #     elements.append(Spacer(1, 0.1 * inch))
 
     # Final Summary
     elements.append(Spacer(1, 0.3 * inch))
@@ -510,11 +508,11 @@ def generate_pdf_report(results, output_path):
     ]))
     elements.append(summary_table)
 
-    elements.append(Spacer(1, 0.2 * inch))
-    elements.append(Paragraph(
-        f"<i>Estimated time to complete manual review: 25 minutes</i>",
-        styles['Normal']
-    ))
+    # elements.append(Spacer(1, 0.2 * inch))
+    # elements.append(Paragraph(
+    #     f"<i>Estimated time to complete manual review: 25 minutes</i>",
+    #     styles['Normal']
+    # ))
 
     # Footer
     elements.append(Spacer(1, 0.4 * inch))
@@ -530,7 +528,7 @@ def generate_pdf_report(results, output_path):
         f"End of Automated Report • Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
         footer_style
     ))
-    elements.append(Paragraph("CS 2500 Autograder v1.0", footer_style))
+    elements.append(Paragraph("Graded By: CS 2500 Autograder", footer_style))
 
     # Build PDF
     doc.build(elements)

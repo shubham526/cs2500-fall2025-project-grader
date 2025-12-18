@@ -24,7 +24,37 @@ class GraphTester:
         try:
             # 1. Look for Class-based implementation
             if hasattr(self.graph_module, 'Graph'):
-                self.graph = self.graph_module.Graph()
+                graph_cls = self.graph_module.Graph
+
+                # VINCE NJOROGE FIX:
+                # Check if __init__ requires args and if class has static loader methods
+                try:
+                    # Try standard empty init first
+                    self.graph = graph_cls()
+                except TypeError:
+                    # If that fails (missing args), try to load data using his methods
+                    nodes_data = {}
+                    edges_data = {}
+
+                    # Check for static make_nodes/make_edges (Vince's pattern)
+                    if hasattr(graph_cls, 'make_nodes'):
+                        try:
+                            nodes_data = graph_cls.make_nodes(self.nodes_file)
+                        except:
+                            pass
+                    if hasattr(graph_cls, 'make_edges'):
+                        try:
+                            edges_data = graph_cls.make_edges(self.edges_file)
+                        except:
+                            pass
+
+                    # Try instantiating with loaded data
+                    try:
+                        self.graph = graph_cls(nodes_data, edges_data)
+                    except:
+                        # Fallback for other signatures
+                        self.graph = graph_cls({}, {})
+
             elif hasattr(self.graph_module, 'RoadNetwork'):
                 self.graph = self.graph_module.RoadNetwork()
             elif hasattr(self.graph_module, 'graph') and isinstance(self.graph_module.graph, type):
@@ -65,6 +95,9 @@ class GraphTester:
         if self._count_nodes() > 0: return
         add_node_method = getattr(self.graph, 'addNode', getattr(self.graph, 'add_node', None))
         add_edge_method = getattr(self.graph, 'addEdge', getattr(self.graph, 'add_edge', None))
+
+        if not add_node_method: return
+
         with open(self.nodes_file, 'r') as f:
             lines = f.readlines()
             for line in lines[1:]:
@@ -199,6 +232,14 @@ class GraphTester:
             if func:
                 weight = func(1, 2)
                 if weight is None: weight = func("1", "2")
+
+            # Vince Njoroge Fix: Check edges dict directly
+            if weight is None and hasattr(self.graph, 'edges') and isinstance(self.graph.edges, dict):
+                if 1 in self.graph.edges and 2 in self.graph.edges[1]:
+                    weight = self.graph.edges[1][2]
+                elif "1" in self.graph.edges and "2" in self.graph.edges["1"]:
+                    weight = self.graph.edges["1"]["2"]
+
             passed = weight is not None and weight > 0
             return {"name": "Get Edge Weight", "passed": passed, "expected": "Get Weight", "actual": "Pass",
                     "points": 2.4}
@@ -242,13 +283,11 @@ class DijkstraTester:
 
     def run_dijkstra(self, start, end):
         try:
-            # 1. Attempt to find class and instantiate (Sophia Nguyen fix)
             func = None
             if hasattr(self.dijkstra_module, 'Dijkstra'):
                 d_class = self.dijkstra_module.Dijkstra(self.graph)
                 func = getattr(d_class, 'find_shortest_path', getattr(d_class, 'dijkstra', None))
 
-            # 2. If no class, look for module-level function
             if not func:
                 func = getattr(self.dijkstra_module, 'dijkstra',
                                getattr(self.dijkstra_module, 'shortest_path',
@@ -258,13 +297,11 @@ class DijkstraTester:
 
             if not func: return None, None, "No function found"
 
-            # Check args string conversion
             start_val, end_val = start, end
             if hasattr(self.graph, 'nodes'):
                 keys = list(self.graph.nodes.keys())
                 if keys and isinstance(keys[0], str): start_val, end_val = str(start), str(end)
 
-            # Smart Dispatch
             try:
                 sig = inspect.signature(func)
                 params = list(sig.parameters.keys())
@@ -279,7 +316,6 @@ class DijkstraTester:
                         kwargs[remaining[1]] = end_val
                     result = func(**kwargs)
                 else:
-                    # If func is bound method (Sophia), it doesn't need graph arg
                     if inspect.ismethod(func):
                         result = func(start_val, end_val)
                     else:
@@ -287,7 +323,6 @@ class DijkstraTester:
             except:
                 result = func(self.graph, start_val, end_val)
 
-            # Parse result
             nodes_explored, path, cost = None, None, None
 
             if hasattr(result, 'cost') and hasattr(result, 'path'):
@@ -316,15 +351,35 @@ class DijkstraTester:
                                     nodes_explored = val
                 elif len(result) == 2:
                     val1, val2 = result
-                    if isinstance(val1, list):
+                    if isinstance(val1, list) and isinstance(val2, list):
+                        try:
+                            nodes_explored = sum(1 for x in val1 if x != float('inf'))
+                            idx = -1
+                            if isinstance(end, int):
+                                idx = end - 1
+                            elif str(end).isdigit():
+                                idx = int(end) - 1
+                            if idx >= 0 and idx < len(val1): cost = val1[idx]
+                            parent_map = {}
+                            for i, p in enumerate(val2):
+                                if p is not None and p != 0:
+                                    parent_map[i + 1] = p
+                            path = self.reconstruct_path_from_parents(parent_map, start_val, end_val)
+                        except:
+                            pass
+                    elif isinstance(val1, list):
                         path, cost = val1, val2
                     else:
                         cost, path = val1, val2
             elif isinstance(result, dict):
                 path = result.get('path', result.get('shortest_path'))
-                cost = result.get('cost', result.get('total_cost'))
-                nodes_explored = result.get('nodes_explored', result.get('visited_nodes'))
+                # VINCE FIX: added 'distance'
+                cost = result.get('cost', result.get('total_cost', result.get('distance')))
+                # VINCE FIX: added 'explored'
+                nodes_explored = result.get('nodes_explored', result.get('visited_nodes', result.get('explored')))
                 if isinstance(nodes_explored, list): nodes_explored = len(nodes_explored)
+
+            if isinstance(cost, list): cost = None
 
             return path, cost, nodes_explored
 
@@ -337,7 +392,7 @@ class DijkstraTester:
         passed = False
         if expected is not None and cost is not None:
             try:
-                if abs(cost - expected) < 0.1: passed = True
+                if abs(float(cost) - expected) < 0.1: passed = True
             except:
                 pass
         elif path is not None:
@@ -375,7 +430,6 @@ class AStarTester:
 
     def run_astar(self, start, end):
         try:
-            # 1. Attempt to find class and instantiate (Sophia Nguyen fix)
             func = None
             if hasattr(self.astar_module, 'AStar'):
                 a_class = self.astar_module.AStar(self.graph)
@@ -399,7 +453,17 @@ class AStarTester:
                 sig = inspect.signature(func)
                 params = list(sig.parameters.keys())
 
-                if 'edges' in params and 'nodes' in params:
+                # VINCE NJOROGE FIX: Handle signature (input_graph, nodes, start, goal)
+                if 'input_graph' in params and 'nodes' in params:
+                    g_nodes = getattr(self.graph, 'nodes', {})
+                    g_edges = getattr(self.graph, 'edges', {})
+                    kwargs = {'input_graph': g_edges, 'nodes': g_nodes}
+                    remaining = [p for p in params if p not in ['input_graph', 'nodes']]
+                    if len(remaining) >= 2:
+                        kwargs[remaining[0]] = start_val
+                        kwargs[remaining[1]] = end_val
+                    result = func(**kwargs)
+                elif 'edges' in params and 'nodes' in params:
                     g_nodes = getattr(self.graph, 'nodes', {})
                     g_edges = getattr(self.graph, 'edges', {})
                     kwargs = {'edges': g_edges, 'nodes': g_nodes}
@@ -444,14 +508,33 @@ class AStarTester:
                                     nodes_explored = val
                 elif len(result) == 2:
                     val1, val2 = result
-                    if isinstance(val1, list):
+                    if isinstance(val1, list) and isinstance(val2, list):
+                        try:
+                            nodes_explored = sum(1 for x in val1 if x != float('inf'))
+                            idx = -1
+                            if isinstance(end, int):
+                                idx = end - 1
+                            elif str(end).isdigit():
+                                idx = int(end) - 1
+                            if idx >= 0 and idx < len(val1): cost = val1[idx]
+                            parent_map = {}
+                            for i, p in enumerate(val2):
+                                if p is not None and p != 0:
+                                    parent_map[i + 1] = p
+                            path = self.reconstruct_path_from_parents(parent_map, start_val, end_val)
+                        except:
+                            pass
+                    elif isinstance(val1, list):
                         path, cost = val1, val2
                     else:
                         cost, path = val1, val2
             elif isinstance(result, dict):
                 path = result.get('path', result.get('shortest_path'))
-                cost = result.get('cost', result.get('total_cost', result.get('total_distance')))
-                nodes_explored = result.get('nodes_explored', result.get('visited_nodes'))
+                # VINCE FIX: added 'total_cost' and 'distance'
+                cost = result.get('cost',
+                                  result.get('total_cost', result.get('total_distance', result.get('distance'))))
+                # VINCE FIX: added 'explored'
+                nodes_explored = result.get('nodes_explored', result.get('visited_nodes', result.get('explored')))
                 if isinstance(nodes_explored, list): nodes_explored = len(nodes_explored)
 
             return path, cost, nodes_explored
@@ -464,7 +547,7 @@ class AStarTester:
         passed = False
         if expected is not None and cost is not None:
             try:
-                if abs(cost - expected) < 0.1: passed = True
+                if abs(float(cost) - expected) < 0.1: passed = True
             except:
                 pass
         return {"name": description, "passed": passed, "start": start, "end": end, "expected_cost": expected,
@@ -488,7 +571,6 @@ class PerformanceTester:
 
             imp = None
             if d_nodes is not None and a_nodes is not None:
-                # Type check to avoid str vs int errors (Sophia fix)
                 try:
                     d_val = int(d_nodes)
                     a_val = int(a_nodes)
